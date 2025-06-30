@@ -700,19 +700,33 @@ ${format === 'xlsx' ?
           },
           {
             name: 'search_cards',
-            description: 'Search for questions/cards by name, ID, or query content',
+            description: 'Search for questions/cards by name, description, ID, or query content with intelligent hybrid matching',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Search query - can be card name (partial match), exact ID, or SQL content to search for'
+                  description: 'Search query - can be card name/description, exact ID, or SQL content to search for'
                 },
                 search_type: {
                   type: 'string',
-                  enum: ['name', 'id', 'content', 'auto'],
-                  description: "Type of search: 'name' for name search, 'id' for exact ID match, 'content' for SQL content search, 'auto' to auto-detect",
+                  enum: ['auto', 'id', 'exact'],
+                  description: "Type of search: 'auto' for intelligent hybrid search (exact + substring + fuzzy), 'id' for exact ID match, 'exact' for exact phrase matching only",
                   default: 'auto'
+                },
+                fuzzy_threshold: {
+                  type: 'number',
+                  description: 'Minimum similarity score for fuzzy matching in auto mode (0.0-1.0, default: 0.4). Higher values = stricter matching.',
+                  minimum: 0.0,
+                  maximum: 1.0,
+                  default: 0.4
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
                 }
               },
               required: ['query']
@@ -720,19 +734,33 @@ ${format === 'xlsx' ?
           },
           {
             name: 'search_dashboards',
-            description: 'Search for dashboards by name or ID',
+            description: 'Search for dashboards by name, description, or ID with intelligent hybrid matching',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Search query - can be dashboard name (partial match) or exact ID'
+                  description: 'Search query - can be dashboard name/description or exact ID'
                 },
                 search_type: {
                   type: 'string',
-                  enum: ['name', 'id', 'auto'],
-                  description: "Type of search: 'name' for name search, 'id' for exact ID match, 'auto' to auto-detect",
+                  enum: ['auto', 'id', 'exact'],
+                  description: "Type of search: 'auto' for intelligent hybrid search (exact + substring + fuzzy), 'id' for exact ID match, 'exact' for exact phrase matching only",
                   default: 'auto'
+                },
+                fuzzy_threshold: {
+                  type: 'number',
+                  description: 'Minimum similarity score for fuzzy matching in auto mode (0.0-1.0, default: 0.4). Higher values = stricter matching.',
+                  minimum: 0.0,
+                  maximum: 1.0,
+                  default: 0.4
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
                 }
               },
               required: ['query']
@@ -1021,6 +1049,8 @@ ${format === 'xlsx' ?
         case 'search_cards': {
           const searchQuery = request.params?.arguments?.query as string;
           const searchType = (request.params?.arguments?.search_type as string) || 'auto';
+          const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
+          const maxResults = (request.params?.arguments?.max_results as number) || 50;
 
           if (!searchQuery) {
             this.logWarn('Missing query parameter in search_cards request', { requestId });
@@ -1030,7 +1060,7 @@ ${format === 'xlsx' ?
             );
           }
 
-          this.logDebug(`Searching for cards with query: "${searchQuery}" (type: ${searchType})`);
+          this.logDebug(`Searching for cards with query: "${searchQuery}" (type: ${searchType}, fuzzy_threshold: ${fuzzyThreshold})`);
 
           // Fetch all cards using cached method
           const fetchStartTime = Date.now();
@@ -1048,10 +1078,9 @@ ${format === 'xlsx' ?
             // Auto-detect search type based on query content
             if (isNumeric) {
               effectiveSearchType = 'id';
-            } else if (/\b(SELECT|FROM|WHERE|JOIN|INSERT|UPDATE|DELETE|WITH)\b/i.test(searchQuery)) {
-              effectiveSearchType = 'content';
             } else {
-              effectiveSearchType = 'name';
+              // Default to intelligent hybrid search
+              effectiveSearchType = 'auto';
             }
           }
 
@@ -1059,40 +1088,73 @@ ${format === 'xlsx' ?
             const targetId = parseInt(searchQuery.trim(), 10);
             results = allCards.filter(card => card.id === targetId);
             this.logInfo(`Found ${results.length} cards matching ID: ${targetId}`);
-          } else if (effectiveSearchType === 'content') {
-            // Content search (case-insensitive partial match in SQL query)
-            const searchTerm = searchQuery.toLowerCase().trim();
-            results = allCards.filter(card => {
-              // Check if card has a dataset_query with native SQL
-              if (card.dataset_query?.native?.query) {
-                const sqlQuery = card.dataset_query.native.query.toLowerCase();
-                return sqlQuery.includes(searchTerm);
-              }
-              return false;
-            });
-            this.logInfo(`Found ${results.length} cards with SQL content matching: "${searchQuery}"`);
-          } else {
-            // Name search (case-insensitive partial match)
-            const searchTerm = searchQuery.toLowerCase().trim();
-            results = allCards.filter(card =>
-              card.name && card.name.toLowerCase().includes(searchTerm)
+          } else if (effectiveSearchType === 'exact') {
+            // Exact phrase search
+            const exactResults = this.performExactSearch(
+              allCards,
+              searchQuery,
+              (card) => ({
+                name: card.name,
+                description: card.description,
+                sql: card.dataset_query?.native?.query
+              }),
+              maxResults
             );
-            this.logInfo(`Found ${results.length} cards matching name pattern: "${searchQuery}"`);
+            results = exactResults;
+            this.logInfo(`Found ${results.length} cards with exact phrase matching: "${searchQuery}"`);
+          } else {
+            // Auto: Intelligent hybrid search (exact + substring + fuzzy)
+            const hybridResults = this.performHybridSearch(
+              allCards,
+              searchQuery,
+              (card) => ({
+                name: card.name,
+                description: card.description,
+                sql: card.dataset_query?.native?.query
+              }),
+              fuzzyThreshold,
+              maxResults
+            );
+            results = hybridResults;
+            this.logInfo(`Found ${results.length} cards using intelligent hybrid search (exact + substring + fuzzy)`);
           }
 
           const searchTime = Date.now() - searchStartTime;
 
-          // Enhance results with SQL preview for better AI agent guidance
-          const enhancedResults = results.map(card => ({
-            ...card,
-            has_sql: !!(card.dataset_query?.native?.query),
-            sql_preview: card.dataset_query?.native?.query ?
-              card.dataset_query.native.query.substring(0, 200) + (card.dataset_query.native.query.length > 200 ? '...' : '') :
-              null,
-            recommended_action: card.dataset_query?.native?.query ?
-              `Use get_card_sql(${card.id}) then execute_query() for reliable execution` :
-              'This card uses GUI query builder - execute_card may be needed'
-          }));
+          // Enhance results with SQL preview and search matching info
+          const enhancedResults = results.map(card => {
+            const baseCard = {
+              ...card,
+              has_sql: !!(card.dataset_query?.native?.query),
+              sql_preview: card.dataset_query?.native?.query ?
+                card.dataset_query.native.query.substring(0, 200) + (card.dataset_query.native.query.length > 200 ? '...' : '') :
+                null,
+              recommended_action: card.dataset_query?.native?.query ?
+                `Use get_card_sql(${card.id}) then execute_query() for reliable execution` :
+                'This card uses GUI query builder - execute_card may be needed'
+            };
+
+            // Add search matching info based on search type
+            if (effectiveSearchType === 'auto' && 'search_score' in card) {
+              return {
+                ...baseCard,
+                search_score: card.search_score,
+                match_type: card.match_type,
+                matched_field: card.matched_field,
+                match_quality: card.search_score > 0.9 ? 'excellent' :
+                  card.search_score > 0.8 ? 'very good' :
+                    card.search_score > 0.6 ? 'good' : 'moderate'
+              };
+            } else if (effectiveSearchType === 'exact' && 'matched_field' in card) {
+              return {
+                ...baseCard,
+                matched_field: card.matched_field,
+                match_type: 'exact'
+              };
+            }
+
+            return baseCard;
+          });
 
           return {
             content: [{
@@ -1100,14 +1162,26 @@ ${format === 'xlsx' ?
               text: JSON.stringify({
                 search_query: searchQuery,
                 search_type: effectiveSearchType,
+                fuzzy_threshold: effectiveSearchType === 'fuzzy' ? fuzzyThreshold : undefined,
                 total_results: results.length,
                 performance_info: {
                   fetch_time_ms: fetchTime,
                   search_time_ms: searchTime,
                   total_cards_searched: allCards.length,
-                  cache_used: fetchTime < 1000 // Assume cache was used if fetch was very fast
+                  cache_used: fetchTime < 1000, // Assume cache was used if fetch was very fast
+                  search_method_used: effectiveSearchType
                 },
                 recommended_workflow: 'For cards with SQL: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
+                search_info: effectiveSearchType === 'auto' ? {
+                  explanation: 'Intelligent hybrid search combining exact matches, substring matches, and fuzzy matching. Results ranked by relevance score.',
+                  fuzzy_threshold_used: fuzzyThreshold,
+                  scoring: 'excellent (>0.9), very good (0.8-0.9), good (0.6-0.8), moderate (0.4-0.6)',
+                  fields_searched: ['name', 'description', 'sql_content'],
+                  match_types: ['exact', 'substring', 'fuzzy']
+                } : effectiveSearchType === 'exact' ? {
+                  explanation: 'Exact phrase matching across all searchable fields.',
+                  fields_searched: ['name', 'description', 'sql_content']
+                } : undefined,
                 results: enhancedResults
               }, null, 2)
             }]
@@ -1117,6 +1191,8 @@ ${format === 'xlsx' ?
         case 'search_dashboards': {
           const searchQuery = request.params?.arguments?.query as string;
           const searchType = (request.params?.arguments?.search_type as string) || 'auto';
+          const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
+          const maxResults = (request.params?.arguments?.max_results as number) || 50;
 
           if (!searchQuery) {
             this.logWarn('Missing query parameter in search_dashboards request', { requestId });
@@ -1126,29 +1202,90 @@ ${format === 'xlsx' ?
             );
           }
 
-          this.logDebug(`Searching for dashboards with query: "${searchQuery}" (type: ${searchType})`);
+          this.logDebug(`Searching for dashboards with query: "${searchQuery}" (type: ${searchType}, fuzzy_threshold: ${fuzzyThreshold})`);
 
           // Fetch all dashboards first
+          const fetchStartTime = Date.now();
           const allDashboards = await this.request<any[]>('/api/dashboard');
+          const fetchTime = Date.now() - fetchStartTime;
 
           let results: any[] = [];
+          const searchStartTime = Date.now();
 
           // Determine search type
           const isNumeric = /^\d+$/.test(searchQuery.trim());
-          const effectiveSearchType = searchType === 'auto' ? (isNumeric ? 'id' : 'name') : searchType;
+          let effectiveSearchType = searchType;
+
+          if (searchType === 'auto') {
+            // Auto-detect search type based on query content
+            if (isNumeric) {
+              effectiveSearchType = 'id';
+            } else {
+              // Default to intelligent hybrid search
+              effectiveSearchType = 'auto';
+            }
+          }
 
           if (effectiveSearchType === 'id') {
             const targetId = parseInt(searchQuery.trim(), 10);
             results = allDashboards.filter(dashboard => dashboard.id === targetId);
             this.logInfo(`Found ${results.length} dashboards matching ID: ${targetId}`);
-          } else {
-            // Name search (case-insensitive partial match)
-            const searchTerm = searchQuery.toLowerCase().trim();
-            results = allDashboards.filter(dashboard =>
-              dashboard.name && dashboard.name.toLowerCase().includes(searchTerm)
+          } else if (effectiveSearchType === 'exact') {
+            // Exact phrase search
+            const exactResults = this.performExactSearch(
+              allDashboards,
+              searchQuery,
+              (dashboard) => ({
+                name: dashboard.name,
+                description: dashboard.description
+              }),
+              maxResults
             );
-            this.logInfo(`Found ${results.length} dashboards matching name pattern: "${searchQuery}"`);
+            results = exactResults;
+            this.logInfo(`Found ${results.length} dashboards with exact phrase matching: "${searchQuery}"`);
+          } else {
+            // Auto: Intelligent hybrid search (exact + substring + fuzzy)
+            const hybridResults = this.performHybridSearch(
+              allDashboards,
+              searchQuery,
+              (dashboard) => ({
+                name: dashboard.name,
+                description: dashboard.description
+              }),
+              fuzzyThreshold,
+              maxResults
+            );
+            results = hybridResults;
+            this.logInfo(`Found ${results.length} dashboards using intelligent hybrid search (exact + substring + fuzzy)`);
           }
+
+          const searchTime = Date.now() - searchStartTime;
+
+          // Enhance results with search matching info
+          const enhancedResults = results.map(dashboard => {
+            const baseDashboard = { ...dashboard };
+
+            // Add search matching info based on search type
+            if (effectiveSearchType === 'auto' && 'search_score' in dashboard) {
+              return {
+                ...baseDashboard,
+                search_score: dashboard.search_score,
+                match_type: dashboard.match_type,
+                matched_field: dashboard.matched_field,
+                match_quality: dashboard.search_score > 0.9 ? 'excellent' :
+                  dashboard.search_score > 0.8 ? 'very good' :
+                    dashboard.search_score > 0.6 ? 'good' : 'moderate'
+              };
+            } else if (effectiveSearchType === 'exact' && 'matched_field' in dashboard) {
+              return {
+                ...baseDashboard,
+                matched_field: dashboard.matched_field,
+                match_type: 'exact'
+              };
+            }
+
+            return baseDashboard;
+          });
 
           return {
             content: [{
@@ -1156,8 +1293,25 @@ ${format === 'xlsx' ?
               text: JSON.stringify({
                 search_query: searchQuery,
                 search_type: effectiveSearchType,
+                fuzzy_threshold: effectiveSearchType === 'fuzzy' ? fuzzyThreshold : undefined,
                 total_results: results.length,
-                results: results
+                performance_info: {
+                  fetch_time_ms: fetchTime,
+                  search_time_ms: searchTime,
+                  total_dashboards_searched: allDashboards.length,
+                  search_method_used: effectiveSearchType
+                },
+                search_info: effectiveSearchType === 'auto' ? {
+                  explanation: 'Intelligent hybrid search combining exact matches, substring matches, and fuzzy matching. Results ranked by relevance score.',
+                  fuzzy_threshold_used: fuzzyThreshold,
+                  scoring: 'excellent (>0.9), very good (0.8-0.9), good (0.6-0.8), moderate (0.4-0.6)',
+                  fields_searched: ['name', 'description'],
+                  match_types: ['exact', 'substring', 'fuzzy']
+                } : effectiveSearchType === 'exact' ? {
+                  explanation: 'Exact phrase matching across all searchable fields.',
+                  fields_searched: ['name', 'description']
+                } : undefined,
+                results: enhancedResults
               }, null, 2)
             }]
           };
@@ -1485,6 +1639,233 @@ ${format === 'xlsx' ?
         };
       }
     });
+  }
+
+  /**
+   * Calculate Levenshtein distance between two strings for fuzzy matching
+   */
+  private calculateLevenshteinDistance(str1: string, str2: string): number {
+    const matrix: number[][] = [];
+    const len1 = str1.length;
+    const len2 = str2.length;
+
+    // Initialize matrix
+    for (let i = 0; i <= len1; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= len2; j++) {
+      matrix[0][j] = j;
+    }
+
+    // Fill matrix
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        if (str1[i - 1] === str2[j - 1]) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j] + 1,     // deletion
+            matrix[i][j - 1] + 1,     // insertion
+            matrix[i - 1][j - 1] + 1  // substitution
+          );
+        }
+      }
+    }
+
+    return matrix[len1][len2];
+  }
+
+  /**
+   * Calculate fuzzy match score (0-1, where 1 is perfect match)
+   */
+  private calculateFuzzyScore(query: string, target: string): number {
+    if (!query || !target) return 0;
+
+    const queryLower = query.toLowerCase().trim();
+    const targetLower = target.toLowerCase().trim();
+
+    // Exact match gets highest score
+    if (queryLower === targetLower) return 1.0;
+
+    // Check for word-based matches (split by spaces and check individual words)
+    const queryWords = queryLower.split(/\s+/);
+    const targetWords = targetLower.split(/\s+/);
+
+    // Direct contains match gets high score
+    if (targetLower.includes(queryLower)) {
+      const ratio = queryLower.length / targetLower.length;
+      return 0.85 + (ratio * 0.1); // 0.85-0.95 range for contains matches
+    }
+
+    // Check if query matches any complete word in target
+    for (const queryWord of queryWords) {
+      if (queryWord.length >= 3) { // Only check meaningful words
+        for (const targetWord of targetWords) {
+          if (targetWord === queryWord) {
+            return 0.8; // High score for exact word match
+          }
+          if (targetWord.includes(queryWord) && queryWord.length >= 4) {
+            return 0.75; // Good score for word contains
+          }
+        }
+      }
+    }
+
+    // Try fuzzy matching on individual words for better typo handling
+    let bestWordScore = 0;
+    for (const queryWord of queryWords) {
+      if (queryWord.length >= 3) {
+        for (const targetWord of targetWords) {
+          if (targetWord.length >= 3) {
+            const distance = this.calculateLevenshteinDistance(queryWord, targetWord);
+            const maxLength = Math.max(queryWord.length, targetWord.length);
+            const wordSimilarity = 1 - (distance / maxLength);
+
+            // Boost score for similar-length words
+            const lengthDiff = Math.abs(queryWord.length - targetWord.length);
+            const lengthPenalty = lengthDiff / maxLength * 0.2;
+            const adjustedScore = Math.max(0, wordSimilarity - lengthPenalty);
+
+            if (adjustedScore > bestWordScore) {
+              bestWordScore = adjustedScore;
+            }
+          }
+        }
+      }
+    }
+
+    // If we found a good word match, use it
+    if (bestWordScore >= 0.6) {
+      return Math.min(bestWordScore + 0.1, 0.8); // Cap at 0.8 for fuzzy word matches
+    }
+
+    // Calculate Levenshtein distance for full string fuzzy matching
+    const distance = this.calculateLevenshteinDistance(queryLower, targetLower);
+    const maxLength = Math.max(queryLower.length, targetLower.length);
+
+    // Convert distance to similarity score (0-1)
+    const similarity = 1 - (distance / maxLength);
+
+    // For shorter queries, be more lenient
+    const lengthBonus = queryLower.length <= 5 ? 0.1 : 0;
+    const finalScore = similarity + lengthBonus;
+
+    // Apply threshold - only return scores above 0.4 for fuzzy matching
+    return finalScore >= 0.4 ? Math.min(finalScore, 1.0) : 0;
+  }
+
+
+
+  /**
+   * Perform intelligent hybrid search combining exact, substring, and fuzzy matching
+   */
+  private performHybridSearch<T>(
+    items: T[],
+    query: string,
+    getSearchFields: (item: T) => { name?: string; description?: string; sql?: string },
+    fuzzyThreshold: number = 0.4,
+    maxResults: number = 50
+  ): Array<T & { search_score: number; match_type: string; matched_field: string }> {
+    const results: Array<T & { search_score: number; match_type: string; matched_field: string }> = [];
+    const queryLower = query.toLowerCase().trim();
+
+    for (const item of items) {
+      const fields = getSearchFields(item);
+      let bestScore = 0;
+      let bestMatchType = '';
+      let bestField = '';
+
+      // Check each field (name, description, SQL)
+      for (const [fieldName, fieldValue] of Object.entries(fields)) {
+        if (!fieldValue) continue;
+
+        const fieldLower = fieldValue.toLowerCase();
+        let score = 0;
+        let matchType = '';
+
+        // 1. Exact match (highest priority)
+        if (fieldLower === queryLower) {
+          score = 1.0;
+          matchType = 'exact';
+        }
+        // 2. Substring match (high priority)
+        else if (fieldLower.includes(queryLower)) {
+          // Score based on how much of the field the query represents
+          const ratio = queryLower.length / fieldLower.length;
+          score = 0.85 + (ratio * 0.1); // 0.85-0.95 range
+          matchType = 'substring';
+        }
+        // 3. Fuzzy match (lower priority)
+        else {
+          const fuzzyScore = this.calculateFuzzyScore(query, fieldValue);
+          if (fuzzyScore >= fuzzyThreshold) {
+            score = fuzzyScore;
+            matchType = 'fuzzy';
+          }
+        }
+
+        // Keep the best match for this item
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatchType = matchType;
+          bestField = `${fieldName}: ${fieldValue.substring(0, 50)}${fieldValue.length > 50 ? '...' : ''}`;
+        }
+      }
+
+      // Add item if it has any match
+      if (bestScore > 0) {
+        results.push({
+          ...item,
+          search_score: bestScore,
+          match_type: bestMatchType,
+          matched_field: bestField
+        });
+      }
+    }
+
+    // Sort by score (descending) and limit results
+    return results
+      .sort((a, b) => b.search_score - a.search_score)
+      .slice(0, maxResults);
+  }
+
+  /**
+   * Perform exact phrase search
+   */
+  private performExactSearch<T>(
+    items: T[],
+    query: string,
+    getSearchFields: (item: T) => { name?: string; description?: string; sql?: string },
+    maxResults: number = 50
+  ): Array<T & { matched_field: string }> {
+    const results: Array<T & { matched_field: string }> = [];
+    const queryLower = query.toLowerCase().trim();
+
+    for (const item of items) {
+      const fields = getSearchFields(item);
+      let matchedField = '';
+
+      // Check each field for exact phrase match
+      for (const [fieldName, fieldValue] of Object.entries(fields)) {
+        if (!fieldValue) continue;
+
+        const fieldLower = fieldValue.toLowerCase();
+        if (fieldLower.includes(queryLower)) {
+          matchedField = `${fieldName}: ${fieldValue.substring(0, 50)}${fieldValue.length > 50 ? '...' : ''}`;
+          break; // Take first match
+        }
+      }
+
+      // Add item if exact phrase was found
+      if (matchedField) {
+        results.push({
+          ...item,
+          matched_field: matchedField
+        });
+      }
+    }
+
+    return results.slice(0, maxResults);
   }
 
   async run() {
