@@ -100,6 +100,10 @@ class MetabaseServer {
   private headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
+  // Add caching for expensive operations
+  private cardsCache: { data: any[] | null; timestamp: number | null } = { data: null, timestamp: null };
+  private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
+  private readonly REQUEST_TIMEOUT_MS = 30000; // 30 seconds timeout
 
   constructor() {
     this.server = new Server(
@@ -197,7 +201,7 @@ class MetabaseServer {
   }
 
   /**
-   * HTTP request utility method
+   * HTTP request utility method with timeout support
    */
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const url = new URL(path, this.baseUrl);
@@ -214,25 +218,93 @@ class MetabaseServer {
     this.logDebug(`Making request to ${url.toString()}`);
     this.logDebug(`Using headers: ${JSON.stringify(headers)}`);
 
-    const response = await fetch(url.toString(), {
-      ...options,
-      headers
-    });
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT_MS);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = `API request failed with status ${response.status}: ${response.statusText}`;
-      this.logWarn(errorMessage, errorData);
+    try {
+      const response = await fetch(url.toString(), {
+        ...options,
+        headers,
+        signal: controller.signal
+      });
 
-      throw {
-        status: response.status,
-        message: response.statusText,
-        data: errorData
-      };
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = `API request failed with status ${response.status}: ${response.statusText}`;
+        this.logWarn(errorMessage, errorData);
+
+        throw {
+          status: response.status,
+          message: response.statusText,
+          data: errorData
+        };
+      }
+
+      this.logDebug(`Received successful response from ${path}`);
+      return response.json() as Promise<T>;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        this.logError(`Request to ${path} timed out after ${this.REQUEST_TIMEOUT_MS}ms`, error);
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Request timed out after ${this.REQUEST_TIMEOUT_MS / 1000} seconds`
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get all cards with caching to prevent repeated expensive API calls
+   */
+  private async getAllCards(): Promise<any[]> {
+    const now = Date.now();
+
+    // Check if we have cached data that's still valid
+    if (this.cardsCache.data && this.cardsCache.timestamp &&
+        (now - this.cardsCache.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug(`Using cached cards data (${this.cardsCache.data.length} cards)`);
+      return this.cardsCache.data;
     }
 
-    this.logDebug(`Received successful response from ${path}`);
-    return response.json() as Promise<T>;
+    // Cache is invalid or doesn't exist, fetch fresh data
+    this.logDebug('Fetching fresh cards data from Metabase API');
+    const startTime = Date.now();
+
+    try {
+      const allCards = await this.request<any[]>('/api/card');
+      const fetchTime = Date.now() - startTime;
+
+      // Update cache
+      this.cardsCache.data = allCards;
+      this.cardsCache.timestamp = now;
+
+      this.logInfo(`Successfully fetched ${allCards.length} cards in ${fetchTime}ms`);
+      return allCards;
+    } catch (error) {
+      this.logError('Failed to fetch cards from Metabase API', error);
+
+      // If we have stale cached data, return it as fallback
+      if (this.cardsCache.data) {
+        this.logWarn('Using stale cached data as fallback due to API error');
+        return this.cardsCache.data;
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the cards cache (useful for debugging or when data changes)
+   */
+  private clearCardsCache(): void {
+    this.cardsCache.data = null;
+    this.cardsCache.timestamp = null;
+    this.logDebug('Cards cache cleared');
   }
 
   /**
@@ -705,6 +777,20 @@ ${format === 'xlsx' ?
               },
               required: ['database_id', 'query']
             }
+          },
+          {
+            name: 'clear_cache',
+            description: 'Clear the internal cache for cards data. Useful for debugging or when you know the data has changed.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                random_string: {
+                  type: 'string',
+                  description: 'Dummy parameter for no-parameter tools'
+                }
+              },
+              required: ['random_string']
+            }
           }
         ]
       };
@@ -739,7 +825,7 @@ ${format === 'xlsx' ?
 
         case 'list_cards': {
           this.logDebug('Fetching all cards/questions from Metabase');
-          const response = await this.request<any[]>('/api/card');
+          const response = await this.getAllCards();
           this.logInfo(`Successfully retrieved ${response.length} cards/questions`);
 
           return {
@@ -946,10 +1032,13 @@ ${format === 'xlsx' ?
 
           this.logDebug(`Searching for cards with query: "${searchQuery}" (type: ${searchType})`);
 
-          // Fetch all cards first
-          const allCards = await this.request<any[]>('/api/card');
+          // Fetch all cards using cached method
+          const fetchStartTime = Date.now();
+          const allCards = await this.getAllCards();
+          const fetchTime = Date.now() - fetchStartTime;
 
           let results: any[] = [];
+          const searchStartTime = Date.now();
 
           // Determine search type
           const isNumeric = /^\d+$/.test(searchQuery.trim());
@@ -991,6 +1080,8 @@ ${format === 'xlsx' ?
             this.logInfo(`Found ${results.length} cards matching name pattern: "${searchQuery}"`);
           }
 
+          const searchTime = Date.now() - searchStartTime;
+
           // Enhance results with SQL preview for better AI agent guidance
           const enhancedResults = results.map(card => ({
             ...card,
@@ -1010,6 +1101,12 @@ ${format === 'xlsx' ?
                 search_query: searchQuery,
                 search_type: effectiveSearchType,
                 total_results: results.length,
+                performance_info: {
+                  fetch_time_ms: fetchTime,
+                  search_time_ms: searchTime,
+                  total_cards_searched: allCards.length,
+                  cache_used: fetchTime < 1000 // Assume cache was used if fetch was very fast
+                },
                 recommended_workflow: 'For cards with SQL: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
                 results: enhancedResults
               }, null, 2)
@@ -1343,6 +1440,23 @@ ${format === 'xlsx' ?
               isError: true
             };
           }
+        }
+
+        case 'clear_cache': {
+          this.logDebug('Clearing cards cache');
+          this.clearCardsCache();
+          this.logInfo('Cards cache cleared successfully');
+
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                message: 'Cards cache cleared successfully',
+                cache_status: 'empty',
+                next_fetch_will_be: 'fresh from API'
+              }, null, 2)
+            }]
+          };
         }
 
         default:
