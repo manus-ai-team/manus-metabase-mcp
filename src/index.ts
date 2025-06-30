@@ -12,6 +12,11 @@
  * - Get database list
  * - Execute question queries
  * - Get dashboard details
+ * - Search for dashboards and questions
+ * - Export query results to CSV, JSON, or XLSX
+ * - Get SQL query from a question
+ * - Execute a question with parameters
+ * - Execute a custom SQL query
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -22,6 +27,9 @@ import {
   CallToolRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 // Custom error enum
 enum ErrorCode {
@@ -429,6 +437,59 @@ class MetabaseServer {
   }
 
   /**
+   * Generate standardized export result message
+   */
+  private generateExportMessage(
+    format: string,
+    query: string,
+    databaseId: number,
+    rowCount: number,
+    fileSize: string,
+    saveFile: boolean,
+    savedFilePath: string,
+    filename: string,
+    fileSaveError?: string
+  ): string {
+    const queryPreview = query.length > 100 ? `${query.substring(0, 100)}...` : query;
+
+    let statusMessage = '';
+    if (saveFile) {
+      if (fileSaveError) {
+        statusMessage = `\nFile Save Status: FAILED - ${fileSaveError}\nFallback: Use manual copy-paste method below\n`;
+      } else {
+        statusMessage = `\nFile Save Status: SUCCESS\nFile Location: ${savedFilePath}\nDownloads Folder: Available for use\n`;
+      }
+    }
+
+    const formatUpper = format.toUpperCase();
+
+    return `# Query Export Results (${formatUpper} Format)
+
+Query: ${queryPreview}
+Database ID: ${databaseId}
+${format === 'xlsx' ? `File Size: ${fileSize} bytes` : `Rows Exported: ${rowCount.toLocaleString()}`}
+Export Method: Metabase high-capacity API (supports up to 1M rows)${statusMessage}
+
+## Manual Save Instructions${saveFile && !fileSaveError ? ' (Alternative Method)' : ''}:
+
+1. Select all the ${formatUpper} content below${format === 'csv' ? ' (between the ```csv markers)' : ''}
+2. Copy the selected text (Cmd+C / Ctrl+C)
+3. Open a ${format === 'xlsx' ? 'spreadsheet application' : format === 'json' ? 'text editor' : 'text editor or spreadsheet application'}
+4. Paste the content (Cmd+V / Ctrl+V)
+5. Save as: ${filename}
+
+## ${formatUpper} Data:
+
+${format === 'xlsx' ?
+    `Excel file exported successfully. ${saveFile && !fileSaveError ?
+      `File has been saved to: ${savedFilePath}\nCompatible with: Excel, Google Sheets, LibreOffice Calc, and other spreadsheet applications` :
+      'To save this Excel file:\n1. Set save_file: true in your export_query parameters\n2. The file will be automatically saved to your Downloads folder\n3. Open with Excel, Google Sheets, or any spreadsheet application'
+    }\n\nTechnical Details:\n- Binary Data: Contains Excel binary data (.xlsx format)\n- High Capacity: Supports up to 1 million rows (vs. 2,000 row limit of standard queries)\n- Native Format: Preserves data types and formatting for spreadsheet applications` :
+    '```' + format + '\n'
+}`;
+  }
+
+  /**
    * Set up tool handlers
    */
   private setupToolHandlers() {
@@ -597,6 +658,15 @@ class MetabaseServer {
                   items: {
                     type: 'object'
                   }
+                },
+                save_file: {
+                  type: 'boolean',
+                  description: 'Whether to automatically save the exported data to the Downloads folder',
+                  default: false
+                },
+                filename: {
+                  type: 'string',
+                  description: 'Custom filename (without extension) for the saved file. If not provided, a timestamp-based name will be used.'
                 }
               },
               required: ['database_id', 'query']
@@ -967,6 +1037,8 @@ class MetabaseServer {
           const query = request.params?.arguments?.query as string;
           const format = (request.params?.arguments?.format as string) || 'csv';
           const nativeParameters = request.params?.arguments?.native_parameters || [];
+          const saveFile = request.params?.arguments?.save_file as boolean || false;
+          const customFilename = request.params?.arguments?.filename as string;
 
           if (!databaseId) {
             this.logWarn('Missing database_id parameter in export_query request', { requestId });
@@ -1049,60 +1121,175 @@ class MetabaseServer {
             let responseData;
             if (format === 'json') {
               responseData = await response.json();
+            } else if (format === 'csv') {
+              // For CSV, get as text
+              responseData = await response.text();
+            } else if (format === 'xlsx') {
+              // For XLSX, get as buffer for binary data
+              responseData = await response.arrayBuffer();
             } else {
-              // For CSV and XLSX, get as text
+              // Fallback to text
               responseData = await response.text();
             }
 
             this.logInfo(`Successfully exported query in ${format} format from database: ${databaseId}`);
 
             if (format === 'json') {
-              // For JSON format, return structured data
+              // Count rows for user info (JSON format has different structure)
+              const rowCount = responseData?.data?.rows?.length || 0;
+              const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+              const baseFilename = customFilename || `metabase_export_${timestamp}`;
+              const filename = `${baseFilename}.json`;
+
+              let fileSaveError: string | undefined;
+              let savedFilePath = '';
+
+              // Save file if requested
+              if (saveFile) {
+                try {
+                  // Get Downloads directory path
+                  const downloadsPath = path.join(os.homedir(), 'Downloads');
+                  savedFilePath = path.join(downloadsPath, filename);
+
+                  // Ensure Downloads directory exists
+                  if (!fs.existsSync(downloadsPath)) {
+                    fs.mkdirSync(downloadsPath, { recursive: true });
+                  }
+
+                  // Write the JSON file
+                  fs.writeFileSync(savedFilePath, JSON.stringify(responseData, null, 2), 'utf8');
+                } catch (error) {
+                  fileSaveError = error instanceof Error ? error.message : 'Unknown error';
+                }
+              }
+
+              const baseMessage = this.generateExportMessage(
+                format,
+                query,
+                databaseId,
+                rowCount,
+                '',
+                saveFile,
+                savedFilePath,
+                filename,
+                fileSaveError
+              );
+
               return {
                 content: [{
                   type: 'text',
-                  text: JSON.stringify(responseData, null, 2)
+                  text: baseMessage + JSON.stringify(responseData, null, 2) + '\n```\n\nSuccess: Exported ' + rowCount.toLocaleString() + ' rows using Metabase\'s high-capacity export endpoint.\nAdvantage: This method supports up to 1 million rows vs. the 2,000 row limit of standard queries.'
                 }]
               };
             } else if (format === 'csv') {
-              // For CSV format, return as text with proper formatting
+              // Count rows for user info
+              const rows = responseData.split('\n').filter((row: string) => row.trim());
+              const rowCount = Math.max(0, rows.length - 1); // Subtract header row
+              const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+              const baseFilename = customFilename || `metabase_export_${timestamp}`;
+              const filename = `${baseFilename}.csv`;
+
+              let fileSaveError: string | undefined;
+              let savedFilePath = '';
+
+              // Save file if requested
+              if (saveFile) {
+                try {
+                  // Get Downloads directory path
+                  const downloadsPath = path.join(os.homedir(), 'Downloads');
+                  savedFilePath = path.join(downloadsPath, filename);
+
+                  // Ensure Downloads directory exists
+                  if (!fs.existsSync(downloadsPath)) {
+                    fs.mkdirSync(downloadsPath, { recursive: true });
+                  }
+
+                  // Write the CSV file
+                  fs.writeFileSync(savedFilePath, responseData, 'utf8');
+                } catch (error) {
+                  fileSaveError = error instanceof Error ? error.message : 'Unknown error';
+                }
+              }
+
+              const baseMessage = this.generateExportMessage(
+                format,
+                query,
+                databaseId,
+                rowCount,
+                '',
+                saveFile,
+                savedFilePath,
+                filename,
+                fileSaveError
+              );
+
               return {
                 content: [{
                   type: 'text',
-                  text: `# Query Export Results (CSV Format)
-
-**Query:** ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}
-**Database ID:** ${databaseId}
-**Format:** ${format}
-**Export Endpoint:** Uses Metabase export API (supports up to 1M rows)
-
-## CSV Data:
-
-\`\`\`csv
-${responseData}
-\`\`\`
-
-Note: This data was exported using Metabase's high-capacity export endpoint, which supports up to 1 million rows compared to the 2,000 row limit of the standard query endpoint.`
+                  text: baseMessage + responseData + '\n```\n\nSuccess: Exported ' + rowCount.toLocaleString() + ' rows using Metabase\'s high-capacity export endpoint.\nAdvantage: This method supports up to 1 million rows vs. the 2,000 row limit of standard queries.'
                 }]
               };
             } else {
-              // For XLSX format, return base64 or binary info
+              // For XLSX format, handle binary data
+              const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+              const baseFilename = customFilename || `metabase_export_${timestamp}`;
+              const filename = `${baseFilename}.xlsx`;
+
+              let fileSaveError: string | undefined;
+              let savedFilePath = '';
+              let fileSize = 'Unknown';
+
+              // Save file if requested
+              if (saveFile) {
+                try {
+                  // Get Downloads directory path
+                  const downloadsPath = path.join(os.homedir(), 'Downloads');
+                  savedFilePath = path.join(downloadsPath, filename);
+
+                  // Ensure Downloads directory exists
+                  if (!fs.existsSync(downloadsPath)) {
+                    fs.mkdirSync(downloadsPath, { recursive: true });
+                  }
+
+                  // For XLSX, we need to handle binary data properly
+                  // The response should be an ArrayBuffer
+                  if (responseData instanceof ArrayBuffer) {
+                    // Convert ArrayBuffer to Buffer for Node.js file writing
+                    const buffer = Buffer.from(responseData);
+                    fs.writeFileSync(savedFilePath, buffer);
+                    fileSize = buffer.length.toLocaleString();
+                  } else {
+                    // Fallback for other data types
+                    fs.writeFileSync(savedFilePath, responseData);
+                    fileSize = 'Unknown size';
+                  }
+                } catch (error) {
+                  fileSaveError = error instanceof Error ? error.message : 'Unknown error';
+                }
+              } else {
+                if (responseData instanceof ArrayBuffer) {
+                  fileSize = responseData.byteLength.toLocaleString();
+                } else {
+                  fileSize = 'Unknown size';
+                }
+              }
+
+              const baseMessage = this.generateExportMessage(
+                format,
+                query,
+                databaseId,
+                0, // XLSX doesn't have easy row counting
+                fileSize,
+                saveFile,
+                savedFilePath,
+                filename,
+                fileSaveError
+              );
+
               return {
                 content: [{
                   type: 'text',
-                  text: `# Query Export Results (XLSX Format)
-
-**Query:** ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}
-**Database ID:** ${databaseId}
-**Format:** ${format}
-**Export Endpoint:** Uses Metabase export API (supports up to 1M rows)
-
-## Excel File Data:
-
-The query results have been exported as an Excel file. The response contains binary XLSX data.
-File size: ${typeof responseData === 'string' ? responseData.length : 'Unknown'} bytes
-
-Note: This data was exported using Metabase's high-capacity export endpoint. To save as an Excel file, you would need to handle the binary data appropriately in your application.`
+                  text: baseMessage + '\n\nSuccess: Excel file exported using Metabase\'s high-capacity export endpoint.\nAdvantage: This method supports up to 1 million rows vs. the 2,000 row limit of standard queries.'
                 }]
               };
             }
