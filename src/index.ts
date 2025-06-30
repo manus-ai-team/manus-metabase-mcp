@@ -2,10 +2,10 @@
 
 /**
  * Metabase MCP Server - Jericho's Custom Fork
- * 
+ *
  * Original Author: Hyeongjun Yu (@hyeongjun-dev)
  * Forked & Modified by: Jericho Sequitin (@jerichosequitin)
- * 
+ *
  * Implements interaction with Metabase API, providing the following functions:
  * - Get dashboard list
  * - Get questions list
@@ -14,21 +14,21 @@
  * - Get dashboard details
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
   CallToolRequestSchema
-} from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
+} from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 
 // Custom error enum
 enum ErrorCode {
-  InternalError = "internal_error",
-  InvalidRequest = "invalid_request",
-  InvalidParams = "invalid_params",
-  MethodNotFound = "method_not_found"
+  InternalError = 'internal_error',
+  InvalidRequest = 'invalid_request',
+  InvalidParams = 'invalid_params',
+  MethodNotFound = 'method_not_found'
 }
 
 // Custom error class
@@ -38,7 +38,7 @@ class McpError extends Error {
   constructor(code: ErrorCode, message: string) {
     super(message);
     this.code = code;
-    this.name = "McpError";
+    this.name = 'McpError';
   }
 }
 
@@ -56,16 +56,16 @@ const METABASE_PASSWORD = process.env.METABASE_PASSWORD;
 const METABASE_API_KEY = process.env.METABASE_API_KEY;
 
 if (!METABASE_URL || (!METABASE_API_KEY && (!METABASE_USER_EMAIL || !METABASE_PASSWORD))) {
-  throw new Error("METABASE_URL is required, and either METABASE_API_KEY or both METABASE_USER_EMAIL and METABASE_PASSWORD must be provided");
+  throw new Error('METABASE_URL is required, and either METABASE_API_KEY or both METABASE_USER_EMAIL and METABASE_PASSWORD must be provided');
 }
 
 // Create custom Schema object using z.object
 const ListResourceTemplatesRequestSchema = z.object({
-  method: z.literal("resources/list_templates")
+  method: z.literal('resources/list_templates')
 });
 
 const ListToolsRequestSchema = z.object({
-  method: z.literal("tools/list")
+  method: z.literal('tools/list')
 });
 
 // Logger level enum
@@ -90,14 +90,14 @@ class MetabaseServer {
   private apiKey: string | null = null;
   private authMethod: AuthMethod = METABASE_API_KEY ? AuthMethod.API_KEY : AuthMethod.SESSION;
   private headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   };
 
   constructor() {
     this.server = new Server(
       {
-        name: "metabase-mcp-server",
-        version: "0.1.0",
+        name: 'metabase-mcp-server',
+        version: '0.1.0',
       },
       {
         capabilities: {
@@ -154,7 +154,7 @@ class MetabaseServer {
 
     // Output human-readable format
     try {
-      let logPrefix = level.toUpperCase();
+      const logPrefix = level.toUpperCase();
 
       if (error) {
         console.error(`[${timestamp}] ${logPrefix}: ${message} - ${error.message || 'Unknown error'}`);
@@ -287,7 +287,7 @@ class MetabaseServer {
         return {
           resources: dashboardsResponse.map((dashboard: any) => ({
             uri: `metabase://dashboard/${dashboard.id}`,
-            mimeType: "application/json",
+            mimeType: 'application/json',
             name: dashboard.name,
             description: `Metabase dashboard: ${dashboard.name}`
           }))
@@ -343,7 +343,7 @@ class MetabaseServer {
         this.logWarn('Missing URI parameter in resource request', { requestId });
         throw new McpError(
           ErrorCode.InvalidParams,
-          "URI parameter is required"
+          'URI parameter is required'
         );
       }
 
@@ -361,7 +361,7 @@ class MetabaseServer {
           return {
             contents: [{
               uri: request.params?.uri,
-              mimeType: "application/json",
+              mimeType: 'application/json',
               text: JSON.stringify(response, null, 2)
             }]
           };
@@ -378,7 +378,7 @@ class MetabaseServer {
           return {
             contents: [{
               uri: request.params?.uri,
-              mimeType: "application/json",
+              mimeType: 'application/json',
               text: JSON.stringify(response, null, 2)
             }]
           };
@@ -395,7 +395,7 @@ class MetabaseServer {
           return {
             contents: [{
               uri: request.params?.uri,
-              mimeType: "application/json",
+              mimeType: 'application/json',
               text: JSON.stringify(response, null, 2)
             }]
           };
@@ -437,84 +437,124 @@ class MetabaseServer {
       return {
         tools: [
           {
-            name: "list_dashboards",
-            description: "List all dashboards in Metabase",
+            name: 'list_dashboards',
+            description: 'List all dashboards in Metabase',
             inputSchema: {
-              type: "object",
+              type: 'object',
               properties: {}
             }
           },
           {
-            name: "list_cards",
-            description: "List all questions/cards in Metabase",
+            name: 'list_cards',
+            description: 'List all questions/cards in Metabase',
             inputSchema: {
-              type: "object",
+              type: 'object',
               properties: {}
             }
           },
           {
-            name: "list_databases",
-            description: "List all databases in Metabase",
+            name: 'list_databases',
+            description: 'List all databases in Metabase',
             inputSchema: {
-              type: "object",
+              type: 'object',
               properties: {}
             }
           },
           {
-            name: "execute_card",
-            description: "Execute a Metabase question/card and get results",
+            name: 'execute_card',
+            description: 'Execute a Metabase question/card and get results',
             inputSchema: {
-              type: "object",
+              type: 'object',
               properties: {
                 card_id: {
-                  type: "number",
-                  description: "ID of the card/question to execute"
+                  type: 'number',
+                  description: 'ID of the card/question to execute'
                 },
                 parameters: {
-                  type: "object",
-                  description: "Optional parameters for the query"
+                  type: 'object',
+                  description: 'Optional parameters for the query'
                 }
               },
-              required: ["card_id"]
+              required: ['card_id']
             }
           },
           {
-            name: "get_dashboard_cards",
-            description: "Get all cards in a dashboard",
+            name: 'get_dashboard_cards',
+            description: 'Get all cards in a dashboard',
             inputSchema: {
-              type: "object",
+              type: 'object',
               properties: {
                 dashboard_id: {
-                  type: "number",
-                  description: "ID of the dashboard"
+                  type: 'number',
+                  description: 'ID of the dashboard'
                 }
               },
-              required: ["dashboard_id"]
+              required: ['dashboard_id']
             }
           },
           {
-            name: "execute_query",
-            description: "Execute a SQL query against a Metabase database",
+            name: 'execute_query',
+            description: 'Execute a SQL query against a Metabase database',
             inputSchema: {
-              type: "object",
+              type: 'object',
               properties: {
                 database_id: {
-                  type: "number",
-                  description: "ID of the database to query"
+                  type: 'number',
+                  description: 'ID of the database to query'
                 },
                 query: {
-                  type: "string",
-                  description: "SQL query to execute"
+                  type: 'string',
+                  description: 'SQL query to execute'
                 },
                 native_parameters: {
-                  type: "array",
-                  description: "Optional parameters for the query",
+                  type: 'array',
+                  description: 'Optional parameters for the query',
                   items: {
-                    type: "object"
+                    type: 'object'
                   }
                 }
               },
-              required: ["database_id", "query"]
+              required: ['database_id', 'query']
+            }
+          },
+          {
+            name: 'search_cards',
+            description: 'Search for questions/cards by name or ID',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Search query - can be card name (partial match) or exact ID'
+                },
+                search_type: {
+                  type: 'string',
+                  enum: ['name', 'id', 'auto'],
+                  description: "Type of search: 'name' for name search, 'id' for exact ID match, 'auto' to auto-detect",
+                  default: 'auto'
+                }
+              },
+              required: ['query']
+            }
+          },
+          {
+            name: 'search_dashboards',
+            description: 'Search for dashboards by name or ID',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Search query - can be dashboard name (partial match) or exact ID'
+                },
+                search_type: {
+                  type: 'string',
+                  enum: ['name', 'id', 'auto'],
+                  description: "Type of search: 'name' for name search, 'id' for exact ID match, 'auto' to auto-detect",
+                  default: 'auto'
+                }
+              },
+              required: ['query']
             }
           }
         ]
@@ -535,155 +575,280 @@ class MetabaseServer {
 
       try {
         switch (request.params?.name) {
-          case "list_dashboards": {
-            this.logDebug('Fetching all dashboards from Metabase');
-            const response = await this.request<any[]>('/api/dashboard');
-            this.logInfo(`Successfully retrieved ${response.length} dashboards`);
+        case 'list_dashboards': {
+          this.logDebug('Fetching all dashboards from Metabase');
+          const response = await this.request<any[]>('/api/dashboard');
+          this.logInfo(`Successfully retrieved ${response.length} dashboards`);
 
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify(response, null, 2)
-              }]
-            };
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(response, null, 2)
+            }]
+          };
+        }
+
+        case 'list_cards': {
+          this.logDebug('Fetching all cards/questions from Metabase');
+          const response = await this.request<any[]>('/api/card');
+          this.logInfo(`Successfully retrieved ${response.length} cards/questions`);
+
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(response, null, 2)
+            }]
+          };
+        }
+
+        case 'list_databases': {
+          this.logDebug('Fetching all databases from Metabase');
+          const response = await this.request<any[]>('/api/database');
+          this.logInfo(`Successfully retrieved ${response.length} databases`);
+
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(response, null, 2)
+            }]
+          };
+        }
+
+        case 'execute_card': {
+          const cardId = request.params?.arguments?.card_id;
+          if (!cardId) {
+            this.logWarn('Missing card_id parameter in execute_card request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'Card ID parameter is required'
+            );
           }
 
-          case "list_cards": {
-            this.logDebug('Fetching all cards/questions from Metabase');
-            const response = await this.request<any[]>('/api/card');
-            this.logInfo(`Successfully retrieved ${response.length} cards/questions`);
+          this.logDebug(`Executing card with ID: ${cardId}`);
+          const parameters = request.params?.arguments?.parameters || {};
 
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify(response, null, 2)
-              }]
-            };
-          }
+          // Convert parameters to the format Metabase expects
+          let formattedParameters: any[] = [];
 
-          case "list_databases": {
-            this.logDebug('Fetching all databases from Metabase');
-            const response = await this.request<any[]>('/api/database');
-            this.logInfo(`Successfully retrieved ${response.length} databases`);
-
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify(response, null, 2)
-              }]
-            };
-          }
-
-          case "execute_card": {
-            const cardId = request.params?.arguments?.card_id;
-            if (!cardId) {
-              this.logWarn('Missing card_id parameter in execute_card request', { requestId });
-              throw new McpError(
-                ErrorCode.InvalidParams,
-                "Card ID parameter is required"
-              );
-            }
-
-            this.logDebug(`Executing card with ID: ${cardId}`);
-            const parameters = request.params?.arguments?.parameters || {};
-
-            const response = await this.request<any>(`/api/card/${cardId}/query`, {
-              method: 'POST',
-              body: JSON.stringify({ parameters })
-            });
-
-            this.logInfo(`Successfully executed card: ${cardId}`);
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify(response, null, 2)
-              }]
-            };
-          }
-
-          case "get_dashboard_cards": {
-            const dashboardId = request.params?.arguments?.dashboard_id;
-            if (!dashboardId) {
-              this.logWarn('Missing dashboard_id parameter in get_dashboard_cards request', { requestId });
-              throw new McpError(
-                ErrorCode.InvalidParams,
-                "Dashboard ID parameter is required"
-              );
-            }
-
-            this.logDebug(`Fetching cards for dashboard with ID: ${dashboardId}`);
-            const response = await this.request<any>(`/api/dashboard/${dashboardId}`);
-
-            const cardCount = response.cards?.length || 0;
-            this.logInfo(`Successfully retrieved ${cardCount} cards from dashboard: ${dashboardId}`);
-
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify(response.cards, null, 2)
-              }]
-            };
-          }
-
-          case "execute_query": {
-            const databaseId = request.params?.arguments?.database_id;
-            const query = request.params?.arguments?.query;
-            const nativeParameters = request.params?.arguments?.native_parameters || [];
-
-            if (!databaseId) {
-              this.logWarn('Missing database_id parameter in execute_query request', { requestId });
-              throw new McpError(
-                ErrorCode.InvalidParams,
-                "Database ID parameter is required"
-              );
-            }
-
-            if (!query) {
-              this.logWarn('Missing query parameter in execute_query request', { requestId });
-              throw new McpError(
-                ErrorCode.InvalidParams,
-                "SQL query parameter is required"
-              );
-            }
-
-            this.logDebug(`Executing SQL query against database ID: ${databaseId}`);
-
-            // Build query request body
-            const queryData = {
-              type: "native",
-              native: {
-                query: query,
-                template_tags: {}
-              },
-              parameters: nativeParameters,
-              database: databaseId
-            };
-
-            const response = await this.request<any>('/api/dataset', {
-              method: 'POST',
-              body: JSON.stringify(queryData)
-            });
-
-            this.logInfo(`Successfully executed SQL query against database: ${databaseId}`);
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify(response, null, 2)
-              }]
-            };
-          }
-
-          default:
-            this.logWarn(`Received request for unknown tool: ${request.params?.name}`, { requestId });
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Unknown tool: ${request.params?.name}`
+          if (typeof parameters === 'object' && parameters !== null) {
+            if (Array.isArray(parameters)) {
+              // If already an array, use as-is
+              formattedParameters = parameters;
+            } else {
+              // Convert object format to array format
+              formattedParameters = Object.entries(parameters).map(([key, value]) => {
+                // Determine parameter type based on value
+                let paramType = 'text'; // default type used by Metabase
+                if (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))) {
+                  paramType = 'id'; // Use 'id' for numeric values (like IDs)
+                } else if (typeof value === 'boolean') {
+                  paramType = 'text';
                 }
-              ],
-              isError: true
-            };
+
+                return {
+                  type: paramType,
+                  target: ['variable', ['template-tag', key]], // Correct format: ["variable", ["template-tag", "variable_name"]]
+                  value: value
+                };
+              });
+            }
+          }
+
+          const response = await this.request<any>(`/api/card/${cardId}/query`, {
+            method: 'POST',
+            body: JSON.stringify({ parameters: formattedParameters })
+          });
+
+          this.logInfo(`Successfully executed card: ${cardId}`);
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(response, null, 2)
+            }]
+          };
+        }
+
+        case 'get_dashboard_cards': {
+          const dashboardId = request.params?.arguments?.dashboard_id;
+          if (!dashboardId) {
+            this.logWarn('Missing dashboard_id parameter in get_dashboard_cards request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'Dashboard ID parameter is required'
+            );
+          }
+
+          this.logDebug(`Fetching cards for dashboard with ID: ${dashboardId}`);
+          const response = await this.request<any>(`/api/dashboard/${dashboardId}`);
+
+          const cardCount = response.cards?.length || 0;
+          this.logInfo(`Successfully retrieved ${cardCount} cards from dashboard: ${dashboardId}`);
+
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(response.cards, null, 2)
+            }]
+          };
+        }
+
+        case 'execute_query': {
+          const databaseId = request.params?.arguments?.database_id;
+          const query = request.params?.arguments?.query;
+          const nativeParameters = request.params?.arguments?.native_parameters || [];
+
+          if (!databaseId) {
+            this.logWarn('Missing database_id parameter in execute_query request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'Database ID parameter is required'
+            );
+          }
+
+          if (!query) {
+            this.logWarn('Missing query parameter in execute_query request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'SQL query parameter is required'
+            );
+          }
+
+          this.logDebug(`Executing SQL query against database ID: ${databaseId}`);
+
+          // Build query request body
+          const queryData = {
+            type: 'native',
+            native: {
+              query: query,
+              template_tags: {}
+            },
+            parameters: nativeParameters,
+            database: databaseId
+          };
+
+          const response = await this.request<any>('/api/dataset', {
+            method: 'POST',
+            body: JSON.stringify(queryData)
+          });
+
+          this.logInfo(`Successfully executed SQL query against database: ${databaseId}`);
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(response, null, 2)
+            }]
+          };
+        }
+
+        case 'search_cards': {
+          const searchQuery = request.params?.arguments?.query as string;
+          const searchType = (request.params?.arguments?.search_type as string) || 'auto';
+
+          if (!searchQuery) {
+            this.logWarn('Missing query parameter in search_cards request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'Search query parameter is required'
+            );
+          }
+
+          this.logDebug(`Searching for cards with query: "${searchQuery}" (type: ${searchType})`);
+
+          // Fetch all cards first
+          const allCards = await this.request<any[]>('/api/card');
+
+          let results: any[] = [];
+
+          // Determine search type
+          const isNumeric = /^\d+$/.test(searchQuery.trim());
+          const effectiveSearchType = searchType === 'auto' ? (isNumeric ? 'id' : 'name') : searchType;
+
+          if (effectiveSearchType === 'id') {
+            const targetId = parseInt(searchQuery.trim(), 10);
+            results = allCards.filter(card => card.id === targetId);
+            this.logInfo(`Found ${results.length} cards matching ID: ${targetId}`);
+          } else {
+            // Name search (case-insensitive partial match)
+            const searchTerm = searchQuery.toLowerCase().trim();
+            results = allCards.filter(card =>
+              card.name && card.name.toLowerCase().includes(searchTerm)
+            );
+            this.logInfo(`Found ${results.length} cards matching name pattern: "${searchQuery}"`);
+          }
+
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                search_query: searchQuery,
+                search_type: effectiveSearchType,
+                total_results: results.length,
+                results: results
+              }, null, 2)
+            }]
+          };
+        }
+
+        case 'search_dashboards': {
+          const searchQuery = request.params?.arguments?.query as string;
+          const searchType = (request.params?.arguments?.search_type as string) || 'auto';
+
+          if (!searchQuery) {
+            this.logWarn('Missing query parameter in search_dashboards request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'Search query parameter is required'
+            );
+          }
+
+          this.logDebug(`Searching for dashboards with query: "${searchQuery}" (type: ${searchType})`);
+
+          // Fetch all dashboards first
+          const allDashboards = await this.request<any[]>('/api/dashboard');
+
+          let results: any[] = [];
+
+          // Determine search type
+          const isNumeric = /^\d+$/.test(searchQuery.trim());
+          const effectiveSearchType = searchType === 'auto' ? (isNumeric ? 'id' : 'name') : searchType;
+
+          if (effectiveSearchType === 'id') {
+            const targetId = parseInt(searchQuery.trim(), 10);
+            results = allDashboards.filter(dashboard => dashboard.id === targetId);
+            this.logInfo(`Found ${results.length} dashboards matching ID: ${targetId}`);
+          } else {
+            // Name search (case-insensitive partial match)
+            const searchTerm = searchQuery.toLowerCase().trim();
+            results = allDashboards.filter(dashboard =>
+              dashboard.name && dashboard.name.toLowerCase().includes(searchTerm)
+            );
+            this.logInfo(`Found ${results.length} dashboards matching name pattern: "${searchQuery}"`);
+          }
+
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                search_query: searchQuery,
+                search_type: effectiveSearchType,
+                total_results: results.length,
+                results: results
+              }, null, 2)
+            }]
+          };
+        }
+
+        default:
+          this.logWarn(`Received request for unknown tool: ${request.params?.name}`, { requestId });
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Unknown tool: ${request.params?.name}`
+              }
+            ],
+            isError: true
+          };
         }
       } catch (error) {
         const apiError = error as ApiError;
@@ -692,7 +857,7 @@ class MetabaseServer {
         this.logError(`Tool execution failed: ${errorMessage}`, error);
         return {
           content: [{
-            type: "text",
+            type: 'text',
             text: `Metabase API error: ${errorMessage}`
           }],
           isError: true
