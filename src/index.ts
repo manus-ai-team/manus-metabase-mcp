@@ -429,6 +429,46 @@ class MetabaseServer {
   }
 
   /**
+   * Get the SQL query from a card and substitute parameters
+   */
+  private async getCardQueryWithParameters(cardId: number, parameters: Record<string, any>): Promise<string> {
+    // Fetch the card details to get the SQL query
+    const card = await this.request<any>(`/api/card/${cardId}`);
+
+    if (!card.dataset_query?.native?.query) {
+      throw new Error('Card does not contain a native SQL query');
+    }
+
+    let sqlQuery = card.dataset_query.native.query;
+    const templateTags = card.dataset_query.native.template_tags || {};
+
+    // Substitute parameters in the query
+    for (const [paramName, paramValue] of Object.entries(parameters)) {
+      if (templateTags[paramName]) {
+        // Handle different parameter patterns
+        const paramPattern1 = new RegExp(`\\{\\{${paramName}\\}\\}`, 'g');
+        const paramPattern2 = new RegExp(`\\[\\[.*?\\{\\{${paramName}\\}\\}.*?\\]\\]`, 'g');
+
+        // For optional parameters in [[...]] brackets, replace the whole bracket content
+        if (paramPattern2.test(sqlQuery)) {
+          const optionalPattern = new RegExp(`\\[\\[(.*?)\\{\\{${paramName}\\}\\}(.*?)\\]\\]`, 'g');
+          sqlQuery = sqlQuery.replace(optionalPattern, (_match: string, before: string, after: string) => {
+            // Replace the template tag with the actual value
+            const replacement = before + paramValue + after;
+            return replacement;
+          });
+        } else {
+          // Simple parameter replacement
+          const quotedValue = typeof paramValue === 'string' ? `'${paramValue}'` : paramValue;
+          sqlQuery = sqlQuery.replace(paramPattern1, quotedValue);
+        }
+      }
+    }
+
+    return sqlQuery;
+  }
+
+  /**
    * Set up tool handlers
    */
   private setupToolHandlers() {
@@ -519,18 +559,18 @@ class MetabaseServer {
           },
           {
             name: 'search_cards',
-            description: 'Search for questions/cards by name or ID',
+            description: 'Search for questions/cards by name, ID, or query content',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Search query - can be card name (partial match) or exact ID'
+                  description: 'Search query - can be card name (partial match), exact ID, or SQL content to search for'
                 },
                 search_type: {
                   type: 'string',
-                  enum: ['name', 'id', 'auto'],
-                  description: "Type of search: 'name' for name search, 'id' for exact ID match, 'auto' to auto-detect",
+                  enum: ['name', 'id', 'content', 'auto'],
+                  description: "Type of search: 'name' for name search, 'id' for exact ID match, 'content' for SQL content search, 'auto' to auto-detect",
                   default: 'auto'
                 }
               },
@@ -615,7 +655,7 @@ class MetabaseServer {
         }
 
         case 'execute_card': {
-          const cardId = request.params?.arguments?.card_id;
+          const cardId = request.params?.arguments?.card_id as number;
           if (!cardId) {
             this.logWarn('Missing card_id parameter in execute_card request', { requestId });
             throw new McpError(
@@ -654,16 +694,88 @@ class MetabaseServer {
             }
           }
 
-          const response = await this.request<any>(`/api/card/${cardId}/query`, {
-            method: 'POST',
-            body: JSON.stringify({ parameters: formattedParameters })
-          });
+          // Try executing the card with a timeout
+          let response: any;
+          let usedFallback = false;
 
-          this.logInfo(`Successfully executed card: ${cardId}`);
+          try {
+            this.logDebug(`Attempting to execute card ${cardId} via API with 30s timeout`);
+
+            // Create a timeout promise
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Card execution timeout')), 30000); // 30 seconds
+            });
+
+            // Race between the API call and timeout
+            const apiPromise = this.request<any>(`/api/card/${cardId}/query`, {
+              method: 'POST',
+              body: JSON.stringify({ parameters: formattedParameters })
+            });
+
+            response = await Promise.race([apiPromise, timeoutPromise]);
+            this.logInfo(`Successfully executed card via API: ${cardId}`);
+
+          } catch (timeoutError) {
+            this.logWarn('Card execution timed out, falling back to direct SQL execution', { cardId, error: timeoutError });
+            usedFallback = true;
+
+            try {
+              // Fallback: Get the card's SQL query and execute it directly
+              const originalParams: Record<string, any> = {};
+
+              // Convert formatted parameters back to simple key-value pairs
+              if (Array.isArray(formattedParameters)) {
+                for (const param of formattedParameters) {
+                  if (param.target && param.target[1] && param.target[1][1]) {
+                    const paramName = param.target[1][1];
+                    originalParams[paramName] = param.value;
+                  }
+                }
+              } else {
+                // If parameters were passed as object, use them directly
+                Object.assign(originalParams, parameters);
+              }
+
+              const sqlQuery = await this.getCardQueryWithParameters(cardId, originalParams);
+              this.logDebug(`Executing fallback SQL query for card ${cardId}`);
+
+              // Get the card details to determine the database
+              const card = await this.request<any>(`/api/card/${cardId}`);
+              const databaseId = card.database_id;
+
+              // Execute the SQL query directly
+              const queryData = {
+                type: 'native',
+                native: {
+                  query: sqlQuery,
+                  template_tags: {}
+                },
+                parameters: [],
+                database: databaseId
+              };
+
+              response = await this.request<any>('/api/dataset', {
+                method: 'POST',
+                body: JSON.stringify(queryData)
+              });
+
+              this.logInfo(`Successfully executed card via fallback SQL: ${cardId}`);
+
+            } catch (fallbackError) {
+              this.logError(`Both card execution and fallback failed for card ${cardId}`, fallbackError);
+              throw fallbackError;
+            }
+          }
+
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify(response, null, 2)
+              text: JSON.stringify({
+                card_id: cardId,
+                execution_method: usedFallback ? 'fallback_sql' : 'card_api',
+                parameters: parameters,
+                data: response
+              }, null, 2)
             }]
           };
         }
@@ -761,12 +873,35 @@ class MetabaseServer {
 
           // Determine search type
           const isNumeric = /^\d+$/.test(searchQuery.trim());
-          const effectiveSearchType = searchType === 'auto' ? (isNumeric ? 'id' : 'name') : searchType;
+          let effectiveSearchType = searchType;
+
+          if (searchType === 'auto') {
+            // Auto-detect search type based on query content
+            if (isNumeric) {
+              effectiveSearchType = 'id';
+            } else if (/\b(SELECT|FROM|WHERE|JOIN|INSERT|UPDATE|DELETE|WITH)\b/i.test(searchQuery)) {
+              effectiveSearchType = 'content';
+            } else {
+              effectiveSearchType = 'name';
+            }
+          }
 
           if (effectiveSearchType === 'id') {
             const targetId = parseInt(searchQuery.trim(), 10);
             results = allCards.filter(card => card.id === targetId);
             this.logInfo(`Found ${results.length} cards matching ID: ${targetId}`);
+          } else if (effectiveSearchType === 'content') {
+            // Content search (case-insensitive partial match in SQL query)
+            const searchTerm = searchQuery.toLowerCase().trim();
+            results = allCards.filter(card => {
+              // Check if card has a dataset_query with native SQL
+              if (card.dataset_query?.native?.query) {
+                const sqlQuery = card.dataset_query.native.query.toLowerCase();
+                return sqlQuery.includes(searchTerm);
+              }
+              return false;
+            });
+            this.logInfo(`Found ${results.length} cards with SQL content matching: "${searchQuery}"`);
           } else {
             // Name search (case-insensitive partial match)
             const searchTerm = searchQuery.toLowerCase().trim();
