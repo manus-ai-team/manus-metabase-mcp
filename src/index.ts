@@ -600,7 +600,7 @@ class MetabaseServer {
           },
           {
             name: 'get_card_sql',
-            description: '[RECOMMENDED] Get the SQL query and database details from a Metabase card/question. Use this before execute_query to get the SQL you can modify.',
+            description: '[RECOMMENDED] Get the SQL query and database details from a Metabase card/question. Uses cached data when available for better performance, with API fallback. Use this before execute_query to get the SQL you can modify.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -851,7 +851,30 @@ class MetabaseServer {
     }
 
     this.logDebug(`Fetching SQL details for card with ID: ${cardId}`);
-    const card = await this.request<any>(`/api/card/${cardId}`);
+
+    let card: any = null;
+    let dataSource = 'api_call'; // Track where we got the data from
+
+    // Optimization: First try to get card data from cached cards list
+    try {
+      const allCards = await this.getAllCards();
+      const cachedCard = allCards.find(c => c.id === cardId);
+
+      if (cachedCard) {
+        card = cachedCard;
+        dataSource = 'cache';
+        this.logDebug(`Found card ${cardId} in cached cards list, using cached data`);
+      }
+    } catch (cacheError) {
+      this.logWarn('Failed to retrieve card from cache, falling back to individual API call', { cardId }, cacheError as Error);
+    }
+
+    // Fallback: If not found in cache or cache failed, make individual API call
+    if (!card) {
+      this.logDebug(`Card ${cardId} not found in cache or cache unavailable, making individual API call`);
+      card = await this.request<any>(`/api/card/${cardId}`);
+      dataSource = 'api_call';
+    }
 
     // Extract relevant information for query execution
     const result: any = {
@@ -864,7 +887,8 @@ class MetabaseServer {
       description: card.description || null,
       collection_id: card.collection_id,
       created_at: card.created_at,
-      updated_at: card.updated_at
+      updated_at: card.updated_at,
+      data_source: dataSource // Include info about where data came from
     };
 
     // Add guidance for AI agents
@@ -874,7 +898,14 @@ class MetabaseServer {
       result.message = 'Use the database_id and sql_query with execute_query. You can modify the SQL query to add filters or parameters.';
     }
 
-    this.logInfo(`Successfully retrieved SQL details for card: ${cardId}`);
+    // Add performance info
+    if (dataSource === 'cache') {
+      result.performance_note = 'Data retrieved from cached cards list (faster)';
+    } else {
+      result.performance_note = 'Data retrieved via individual API call (fallback method)';
+    }
+
+    this.logInfo(`Successfully retrieved SQL details for card: ${cardId} (source: ${dataSource})`);
     return {
       content: [{
         type: 'text',
