@@ -428,8 +428,6 @@ class MetabaseServer {
     return Math.random().toString(36).substring(2, 15);
   }
 
-
-
   /**
    * Set up tool handlers
    */
@@ -571,6 +569,37 @@ class MetabaseServer {
                 }
               },
               required: ['query']
+            }
+          },
+          {
+            name: 'export_query',
+            description: 'Export large SQL query results using Metabase export endpoints (supports up to 1M rows vs 2K limit of execute_query). Returns data in specified format (CSV, JSON, or XLSX).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                database_id: {
+                  type: 'number',
+                  description: 'ID of the database to query'
+                },
+                query: {
+                  type: 'string',
+                  description: 'SQL query to execute and export'
+                },
+                format: {
+                  type: 'string',
+                  enum: ['csv', 'json', 'xlsx'],
+                  description: 'Export format: csv (text), json (structured data), or xlsx (Excel file)',
+                  default: 'csv'
+                },
+                native_parameters: {
+                  type: 'array',
+                  description: 'Optional parameters for the query',
+                  items: {
+                    type: 'object'
+                  }
+                }
+              },
+              required: ['database_id', 'query']
             }
           }
         ]
@@ -931,6 +960,165 @@ class MetabaseServer {
               }, null, 2)
             }]
           };
+        }
+
+        case 'export_query': {
+          const databaseId = request.params?.arguments?.database_id as number;
+          const query = request.params?.arguments?.query as string;
+          const format = (request.params?.arguments?.format as string) || 'csv';
+          const nativeParameters = request.params?.arguments?.native_parameters || [];
+
+          if (!databaseId) {
+            this.logWarn('Missing database_id parameter in export_query request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'Database ID parameter is required'
+            );
+          }
+
+          if (!query) {
+            this.logWarn('Missing query parameter in export_query request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'SQL query parameter is required'
+            );
+          }
+
+          if (!['csv', 'json', 'xlsx'].includes(format)) {
+            this.logWarn(`Invalid format parameter in export_query request: ${format}`, { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'Format must be one of: csv, json, xlsx'
+            );
+          }
+
+          this.logDebug(`Exporting query in ${format} format from database ID: ${databaseId}`);
+
+          try {
+            // Build query request body according to Metabase export API requirements
+            const queryData = {
+              type: 'native',
+              native: {
+                query: query,
+                template_tags: {}
+              },
+              parameters: nativeParameters,
+              database: databaseId
+            };
+
+            // Use the export endpoint which supports larger result sets (up to 1M rows)
+            const exportEndpoint = `/api/dataset/${format}`;
+
+            // Build the request body with required parameters as per API documentation
+            const requestBody = {
+              query: queryData,
+              format_rows: false,
+              pivot_results: false,
+              visualization_settings: {}
+            };
+
+            // For export endpoints, we need to handle different response types
+            const url = new URL(exportEndpoint, this.baseUrl);
+            const headers = { ...this.headers };
+
+            // Add appropriate authentication headers
+            if (this.authMethod === AuthMethod.API_KEY && this.apiKey) {
+              headers['X-API-KEY'] = this.apiKey;
+            } else if (this.authMethod === AuthMethod.SESSION && this.sessionToken) {
+              headers['X-Metabase-Session'] = this.sessionToken;
+            }
+
+            const response = await fetch(url.toString(), {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              const errorMessage = `Export API request failed with status ${response.status}: ${response.statusText}`;
+              this.logWarn(errorMessage, errorData);
+              throw {
+                status: response.status,
+                message: response.statusText,
+                data: errorData
+              };
+            }
+
+            // Handle different response types based on format
+            let responseData;
+            if (format === 'json') {
+              responseData = await response.json();
+            } else {
+              // For CSV and XLSX, get as text
+              responseData = await response.text();
+            }
+
+            this.logInfo(`Successfully exported query in ${format} format from database: ${databaseId}`);
+
+            if (format === 'json') {
+              // For JSON format, return structured data
+              return {
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify(responseData, null, 2)
+                }]
+              };
+            } else if (format === 'csv') {
+              // For CSV format, return as text with proper formatting
+              return {
+                content: [{
+                  type: 'text',
+                  text: `# Query Export Results (CSV Format)
+
+**Query:** ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}
+**Database ID:** ${databaseId}
+**Format:** ${format}
+**Export Endpoint:** Uses Metabase export API (supports up to 1M rows)
+
+## CSV Data:
+
+\`\`\`csv
+${responseData}
+\`\`\`
+
+Note: This data was exported using Metabase's high-capacity export endpoint, which supports up to 1 million rows compared to the 2,000 row limit of the standard query endpoint.`
+                }]
+              };
+            } else {
+              // For XLSX format, return base64 or binary info
+              return {
+                content: [{
+                  type: 'text',
+                  text: `# Query Export Results (XLSX Format)
+
+**Query:** ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}
+**Database ID:** ${databaseId}
+**Format:** ${format}
+**Export Endpoint:** Uses Metabase export API (supports up to 1M rows)
+
+## Excel File Data:
+
+The query results have been exported as an Excel file. The response contains binary XLSX data.
+File size: ${typeof responseData === 'string' ? responseData.length : 'Unknown'} bytes
+
+Note: This data was exported using Metabase's high-capacity export endpoint. To save as an Excel file, you would need to handle the binary data appropriately in your application.`
+                }]
+              };
+            }
+          } catch (error) {
+            const apiError = error as ApiError;
+            const errorMessage = apiError.data?.message || apiError.message || 'Unknown error';
+
+            this.logError(`Failed to export query in ${format} format: ${errorMessage}`, error);
+            return {
+              content: [{
+                type: 'text',
+                text: `Failed to export query in ${format} format: ${errorMessage}\n\nNote: Make sure your query is valid and the database connection is working. The export endpoint supports up to 1 million rows.`
+              }],
+              isError: true
+            };
+          }
         }
 
         default:
