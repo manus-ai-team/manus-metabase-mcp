@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Metabase MCP Server
+ * Metabase MCP Server - Jericho's Custom Fork
+ * 
+ * Original Author: Hyeongjun Yu (@hyeongjun-dev)
+ * Forked & Modified by: Jericho Sequitin (@jerichosequitin)
+ * 
  * Implements interaction with Metabase API, providing the following functions:
  * - Get dashboard list
  * - Get questions list

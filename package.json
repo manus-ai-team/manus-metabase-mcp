@@ -1,12 +1,12 @@
 {
-  "name": "metabase-mcp-server",
-  "version": "0.1.0",
-  "description": "A Model Context Protocol server for Metabase integration",
+  "name": "@jericho/metabase-mcp-server",
+  "version": "0.2.0",
+  "description": "A custom Model Context Protocol server for Metabase integration - Jericho's version",
   "private": true,
   "type": "module",
   "author": {
-    "name": "Hyeongjun Yu",
-    "url": "https://github.com/hyeongjun-dev"
+    "name": "Jericho Sequitin",
+    "url": "https://github.com/jerichosequitin"
   },
   "bin": {
     "metabase-mcp-server": "./build/index.js"
@@ -44,7 +44,9 @@
     "mcp",
     "model-context-protocol",
     "ai",
-    "claude"
+    "claude",
+    "custom",
+    "jericho"
   ],
   "engines": {
     "node": ">=18.0.0"

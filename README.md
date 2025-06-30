@@ -1,8 +1,9 @@
-# Metabase MCP Server
+# Metabase MCP Server - Jericho's Custom Fork
 
-**Author**: Hyeongjun Yu ([@hyeongjun-dev](https://github.com/hyeongjun-dev))
+**Original Author**: Hyeongjun Yu (@hyeongjun-dev)  
+**Forked & Modified by**: Jericho Sequitin (@jerichosequitin)
 
-[![smithery badge](https://smithery.ai/badge/@hyeongjun-dev/metabase-mcp-server)](https://smithery.ai/server/@hyeongjun-dev/metabase-mcp-server)
+> This is a customized fork of the original [metabase-mcp-server](https://github.com/hyeongjun-dev/metabase-mcp-server) with additional features and modifications.
 
 A Model Context Protocol server that integrates AI assistants with Metabase analytics platform.
 
@@ -17,6 +18,7 @@ This TypeScript-based MCP server provides seamless integration with the Metabase
 - **Structured Data Access**: JSON-formatted responses for easy consumption by AI assistants
 - **Comprehensive Logging**: Detailed logging for easy debugging and monitoring
 - **Error Handling**: Robust error handling with clear error messages
+- **Custom Modifications**: Enhanced with additional features and improvements
 
 ## Available Tools
 
@@ -148,6 +150,18 @@ Alternatively, you can use the Smithery hosted version via npx with JSON configu
 }
 ```
 
+## Custom Modifications
+
+This fork includes the following enhancements:
+
+- [ ] Enhanced error handling and logging
+- [ ] Additional tool functions for advanced Metabase operations
+- [ ] Performance optimizations
+- [ ] Extended configuration options
+- [ ] Custom authentication flows
+
+*More modifications will be documented as they are implemented.*
+
 ## Debugging
 
 Since MCP servers communicate over stdio, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) for debugging:
@@ -164,12 +178,12 @@ A Docker image is available for containerized deployment:
 
 ```bash
 # Build the Docker image
-docker build -t metabase-mcp-server .
+docker build -t jericho-metabase-mcp-server .
 
 # Run the container with environment variables
 docker run -e METABASE_URL=https://your-metabase.com \
            -e METABASE_API_KEY=your_api_key \
-           metabase-mcp-server
+           jericho-metabase-mcp-server
 ```
 
 ## Security Considerations
@@ -182,3 +196,12 @@ docker run -e METABASE_URL=https://your-metabase.com \
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Original Project
+
+This project is based on the original work by Hyeongjun Yu. You can find the original repository at:
+https://github.com/hyeongjun-dev/metabase-mcp-server
+
+## License
+
+This project maintains the same license as the original project.
