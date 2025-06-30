@@ -437,6 +437,40 @@ class MetabaseServer {
   }
 
   /**
+   * Sanitize filename to prevent path traversal attacks
+   */
+  private sanitizeFilename(filename: string | undefined): string {
+    if (!filename || typeof filename !== 'string') {
+      return '';
+    }
+
+    // Remove path separators and other dangerous characters
+    // Keep only alphanumeric, hyphens, underscores, spaces, and dots
+    return filename
+      .replace(/[/\\:*?"<>|]/g, '') // Remove path separators and invalid filename chars
+      .replace(/\.\./g, '') // Remove parent directory references
+      .replace(/^\.+/, '') // Remove leading dots
+      .trim()
+      .substring(0, 255); // Limit length to prevent filesystem issues
+  }
+
+  /**
+   * Convert parameter to boolean safely
+   */
+  private toBooleanSafe(value: unknown): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+    return Boolean(value);
+  }
+
+  /**
    * Generate standardized export result message
    */
   private generateExportMessage(
@@ -1037,7 +1071,7 @@ ${format === 'xlsx' ?
           const query = request.params?.arguments?.query as string;
           const format = (request.params?.arguments?.format as string) || 'csv';
           const nativeParameters = request.params?.arguments?.native_parameters || [];
-          const saveFile = request.params?.arguments?.save_file as boolean || false;
+          const saveFile = this.toBooleanSafe(request.params?.arguments?.save_file);
           const customFilename = request.params?.arguments?.filename as string;
 
           if (!databaseId) {
@@ -1138,7 +1172,8 @@ ${format === 'xlsx' ?
               // Count rows for user info (JSON format has different structure)
               const rowCount = responseData?.data?.rows?.length || 0;
               const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-              const baseFilename = customFilename || `metabase_export_${timestamp}`;
+              const sanitizedCustomFilename = this.sanitizeFilename(customFilename);
+              const baseFilename = sanitizedCustomFilename || `metabase_export_${timestamp}`;
               const filename = `${baseFilename}.json`;
 
               let fileSaveError: string | undefined;
@@ -1186,7 +1221,8 @@ ${format === 'xlsx' ?
               const rows = responseData.split('\n').filter((row: string) => row.trim());
               const rowCount = Math.max(0, rows.length - 1); // Subtract header row
               const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-              const baseFilename = customFilename || `metabase_export_${timestamp}`;
+              const sanitizedCustomFilename = this.sanitizeFilename(customFilename);
+              const baseFilename = sanitizedCustomFilename || `metabase_export_${timestamp}`;
               const filename = `${baseFilename}.csv`;
 
               let fileSaveError: string | undefined;
@@ -1232,7 +1268,8 @@ ${format === 'xlsx' ?
             } else {
               // For XLSX format, handle binary data
               const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-              const baseFilename = customFilename || `metabase_export_${timestamp}`;
+              const sanitizedCustomFilename = this.sanitizeFilename(customFilename);
+              const baseFilename = sanitizedCustomFilename || `metabase_export_${timestamp}`;
               const filename = `${baseFilename}.xlsx`;
 
               let fileSaveError: string | undefined;
