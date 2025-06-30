@@ -428,45 +428,7 @@ class MetabaseServer {
     return Math.random().toString(36).substring(2, 15);
   }
 
-  /**
-   * Get the SQL query from a card and substitute parameters
-   */
-  private async getCardQueryWithParameters(cardId: number, parameters: Record<string, any>): Promise<string> {
-    // Fetch the card details to get the SQL query
-    const card = await this.request<any>(`/api/card/${cardId}`);
 
-    if (!card.dataset_query?.native?.query) {
-      throw new Error('Card does not contain a native SQL query');
-    }
-
-    let sqlQuery = card.dataset_query.native.query;
-    const templateTags = card.dataset_query.native.template_tags || {};
-
-    // Substitute parameters in the query
-    for (const [paramName, paramValue] of Object.entries(parameters)) {
-      if (templateTags[paramName]) {
-        // Handle different parameter patterns
-        const paramPattern1 = new RegExp(`\\{\\{${paramName}\\}\\}`, 'g');
-        const paramPattern2 = new RegExp(`\\[\\[.*?\\{\\{${paramName}\\}\\}.*?\\]\\]`, 'g');
-
-        // For optional parameters in [[...]] brackets, replace the whole bracket content
-        if (paramPattern2.test(sqlQuery)) {
-          const optionalPattern = new RegExp(`\\[\\[(.*?)\\{\\{${paramName}\\}\\}(.*?)\\]\\]`, 'g');
-          sqlQuery = sqlQuery.replace(optionalPattern, (_match: string, before: string, after: string) => {
-            // Replace the template tag with the actual value
-            const replacement = before + paramValue + after;
-            return replacement;
-          });
-        } else {
-          // Simple parameter replacement
-          const quotedValue = typeof paramValue === 'string' ? `'${paramValue}'` : paramValue;
-          sqlQuery = sqlQuery.replace(paramPattern1, quotedValue);
-        }
-      }
-    }
-
-    return sqlQuery;
-  }
 
   /**
    * Set up tool handlers
@@ -502,7 +464,7 @@ class MetabaseServer {
           },
           {
             name: 'execute_card',
-            description: 'Execute a Metabase question/card and get results',
+            description: '[DEPRECATED - Use execute_query instead] Execute a Metabase question/card directly. This method is unreliable and may timeout. Prefer using get_card_sql + execute_query for better control.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -534,7 +496,7 @@ class MetabaseServer {
           },
           {
             name: 'execute_query',
-            description: 'Execute a SQL query against a Metabase database',
+            description: '[RECOMMENDED] Execute a SQL query against a Metabase database. This is the preferred method for running queries as it provides better control and reliability than execute_card.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -544,7 +506,7 @@ class MetabaseServer {
                 },
                 query: {
                   type: 'string',
-                  description: 'SQL query to execute'
+                  description: 'SQL query to execute. You can modify card queries by getting them via get_card_sql first.'
                 },
                 native_parameters: {
                   type: 'array',
@@ -555,6 +517,20 @@ class MetabaseServer {
                 }
               },
               required: ['database_id', 'query']
+            }
+          },
+          {
+            name: 'get_card_sql',
+            description: '[RECOMMENDED] Get the SQL query and database details from a Metabase card/question. Use this before execute_query to get the SQL you can modify.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                card_id: {
+                  type: 'number',
+                  description: 'ID of the card/question to get SQL from'
+                }
+              },
+              required: ['card_id']
             }
           },
           {
@@ -654,6 +630,49 @@ class MetabaseServer {
           };
         }
 
+        case 'get_card_sql': {
+          const cardId = request.params?.arguments?.card_id as number;
+          if (!cardId) {
+            this.logWarn('Missing card_id parameter in get_card_sql request', { requestId });
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              'Card ID parameter is required'
+            );
+          }
+
+          this.logDebug(`Fetching SQL details for card with ID: ${cardId}`);
+          const card = await this.request<any>(`/api/card/${cardId}`);
+
+          // Extract relevant information for query execution
+          const result: any = {
+            card_id: cardId,
+            card_name: card.name,
+            database_id: card.database_id,
+            sql_query: card.dataset_query?.native?.query || null,
+            template_tags: card.dataset_query?.native?.template_tags || {},
+            query_type: card.dataset_query?.type || 'unknown',
+            description: card.description || null,
+            collection_id: card.collection_id,
+            created_at: card.created_at,
+            updated_at: card.updated_at
+          };
+
+          // Add guidance for AI agents
+          if (!result.sql_query) {
+            result.message = 'This card does not contain a native SQL query. It may be a GUI-based question.';
+          } else {
+            result.message = 'Use the database_id and sql_query with execute_query. You can modify the SQL query to add filters or parameters.';
+          }
+
+          this.logInfo(`Successfully retrieved SQL details for card: ${cardId}`);
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
+            }]
+          };
+        }
+
         case 'execute_card': {
           const cardId = request.params?.arguments?.card_id as number;
           if (!cardId) {
@@ -694,88 +713,16 @@ class MetabaseServer {
             }
           }
 
-          // Try executing the card with a timeout
-          let response: any;
-          let usedFallback = false;
+          const response = await this.request<any>(`/api/card/${cardId}/query`, {
+            method: 'POST',
+            body: JSON.stringify({ parameters: formattedParameters })
+          });
 
-          try {
-            this.logDebug(`Attempting to execute card ${cardId} via API with 30s timeout`);
-
-            // Create a timeout promise
-            const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Card execution timeout')), 30000); // 30 seconds
-            });
-
-            // Race between the API call and timeout
-            const apiPromise = this.request<any>(`/api/card/${cardId}/query`, {
-              method: 'POST',
-              body: JSON.stringify({ parameters: formattedParameters })
-            });
-
-            response = await Promise.race([apiPromise, timeoutPromise]);
-            this.logInfo(`Successfully executed card via API: ${cardId}`);
-
-          } catch (timeoutError) {
-            this.logWarn('Card execution timed out, falling back to direct SQL execution', { cardId, error: timeoutError });
-            usedFallback = true;
-
-            try {
-              // Fallback: Get the card's SQL query and execute it directly
-              const originalParams: Record<string, any> = {};
-
-              // Convert formatted parameters back to simple key-value pairs
-              if (Array.isArray(formattedParameters)) {
-                for (const param of formattedParameters) {
-                  if (param.target && param.target[1] && param.target[1][1]) {
-                    const paramName = param.target[1][1];
-                    originalParams[paramName] = param.value;
-                  }
-                }
-              } else {
-                // If parameters were passed as object, use them directly
-                Object.assign(originalParams, parameters);
-              }
-
-              const sqlQuery = await this.getCardQueryWithParameters(cardId, originalParams);
-              this.logDebug(`Executing fallback SQL query for card ${cardId}`);
-
-              // Get the card details to determine the database
-              const card = await this.request<any>(`/api/card/${cardId}`);
-              const databaseId = card.database_id;
-
-              // Execute the SQL query directly
-              const queryData = {
-                type: 'native',
-                native: {
-                  query: sqlQuery,
-                  template_tags: {}
-                },
-                parameters: [],
-                database: databaseId
-              };
-
-              response = await this.request<any>('/api/dataset', {
-                method: 'POST',
-                body: JSON.stringify(queryData)
-              });
-
-              this.logInfo(`Successfully executed card via fallback SQL: ${cardId}`);
-
-            } catch (fallbackError) {
-              this.logError(`Both card execution and fallback failed for card ${cardId}`, fallbackError);
-              throw fallbackError;
-            }
-          }
-
+          this.logInfo(`Successfully executed card: ${cardId}`);
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify({
-                card_id: cardId,
-                execution_method: usedFallback ? 'fallback_sql' : 'card_api',
-                parameters: parameters,
-                data: response
-              }, null, 2)
+              text: JSON.stringify(response, null, 2)
             }]
           };
         }
@@ -911,6 +858,18 @@ class MetabaseServer {
             this.logInfo(`Found ${results.length} cards matching name pattern: "${searchQuery}"`);
           }
 
+          // Enhance results with SQL preview for better AI agent guidance
+          const enhancedResults = results.map(card => ({
+            ...card,
+            has_sql: !!(card.dataset_query?.native?.query),
+            sql_preview: card.dataset_query?.native?.query ?
+              card.dataset_query.native.query.substring(0, 200) + (card.dataset_query.native.query.length > 200 ? '...' : '') :
+              null,
+            recommended_action: card.dataset_query?.native?.query ?
+              `Use get_card_sql(${card.id}) then execute_query() for reliable execution` :
+              'This card uses GUI query builder - execute_card may be needed'
+          }));
+
           return {
             content: [{
               type: 'text',
@@ -918,7 +877,8 @@ class MetabaseServer {
                 search_query: searchQuery,
                 search_type: effectiveSearchType,
                 total_results: results.length,
-                results: results
+                recommended_workflow: 'For cards with SQL: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
+                results: enhancedResults
               }, null, 2)
             }]
           };
