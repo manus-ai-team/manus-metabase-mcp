@@ -1,6 +1,7 @@
-# Metabase MCP Server - Jericho's Custom Fork
+# Metabase MCP Server
 
-**Original Author**: Hyeongjun Yu (@hyeongjun-dev)  
+**Original Author**: Hyeongjun Yu (@hyeongjun-dev)
+
 **Forked & Modified by**: Jericho Sequitin (@jerichosequitin)
 
 > This is a customized fork of the original [metabase-mcp-server](https://github.com/hyeongjun-dev/metabase-mcp-server) with additional features and modifications.
@@ -24,12 +25,23 @@ This TypeScript-based MCP server provides seamless integration with the Metabase
 
 The server exposes the following tools for AI assistants:
 
+### Core Tools
 - `list_dashboards`: Retrieve all available dashboards in your Metabase instance
 - `list_cards`: Get all saved questions/cards in Metabase
 - `list_databases`: View all connected database sources
-- `execute_card`: Run saved questions and retrieve results with optional parameters
 - `get_dashboard_cards`: Extract all cards from a specific dashboard
-- `execute_query`: Execute custom SQL queries against any connected database
+
+### Query Execution Tools
+- `execute_query`: **[RECOMMENDED]** Execute custom SQL queries against any connected database (2K row limit)
+- `execute_card`: **[DEPRECATED]** Run saved questions with optional parameters (unreliable, use get_card_sql + execute_query instead)
+- `get_card_sql`: **[RECOMMENDED]** Get the SQL query and database details from a Metabase card/question
+
+### Search Tools
+- `search_cards`: Search for questions/cards by name, ID, or SQL content
+- `search_dashboards`: Search for dashboards by name or ID
+
+### Export Tools
+- `export_query`: Export large SQL query results using Metabase export endpoints (supports up to 1M rows vs 2K limit of execute_query). Supports CSV, JSON, and XLSX formats with optional file saving.
 
 ## Configuration
 
@@ -154,13 +166,82 @@ Alternatively, you can use the Smithery hosted version via npx with JSON configu
 
 This fork includes the following enhancements:
 
-- [ ] Enhanced error handling and logging
-- [ ] Additional tool functions for advanced Metabase operations
-- [ ] Performance optimizations
-- [ ] Extended configuration options
-- [ ] Custom authentication flows
+### Implemented Features
+- [x] **Enhanced Search Functionality**: Added `search_cards` and `search_dashboards` tools with support for name, ID, and SQL content search
+- [x] **SQL Query Extraction**: Added `get_card_sql` tool to extract SQL queries from Metabase cards for modification and reuse
+- [x] **Data Export**: Added `export_query` tool supporting CSV, JSON, and XLSX formats with up to 1M row capacity
 
-*More modifications will be documented as they are implemented.*
+### Tool Enhancements
+
+#### Search Tools
+- **Auto-detection**: Automatically detects search type (name, ID, or content) based on query pattern
+- **SQL Content Search**: Search within SQL queries of saved cards
+- **Enhanced Results**: Provides SQL previews and recommended workflows for AI agents
+
+#### Export Tools
+- **Multiple Formats**: Support for CSV, JSON, and XLSX export formats
+- **High Capacity**: Up to 1 million rows (vs 2,000 row limit of standard queries)
+- **File Management**: Automatic file saving to Downloads folder with error handling
+- **Custom Filenames**: Support for custom filename specification
+- **Progress Feedback**: Clear status messages and fallback instructions
+
+#### Query Execution
+- **SQL Extraction**: Get SQL queries from existing cards for modification
+- **Parameter Support**: Enhanced parameter handling with proper type detection
+- **Reliability**: Deprecated unreliable `execute_card` in favor of `get_card_sql` + `execute_query` workflow
+
+## Usage Examples
+
+### Search for Cards
+```javascript
+// Search by name
+search_cards({ query: "sales dashboard" })
+
+// Search by ID
+search_cards({ query: "42" })
+
+// Search by SQL content
+search_cards({ query: "SELECT * FROM orders" })
+```
+
+### Extract and Modify SQL Queries
+```javascript
+// 1. Get SQL from existing card
+get_card_sql({ card_id: 42 })
+
+// 2. Execute with modifications
+execute_query({
+  database_id: 1,
+  query: "SELECT * FROM users WHERE created_at > '2024-01-01' LIMIT 1000"
+})
+```
+
+### Export Large Datasets
+```javascript
+// Export as CSV with auto-save
+export_query({
+  database_id: 1,
+  query: "SELECT * FROM large_table",
+  format: "csv",
+  save_file: true,
+  filename: "large_export"
+})
+
+// Export as Excel file
+export_query({
+  database_id: 1,
+  query: "SELECT * FROM sales_data",
+  format: "xlsx",
+  save_file: true
+})
+
+// Export as JSON for API integration
+export_query({
+  database_id: 1,
+  query: "SELECT id, name, email FROM users",
+  format: "json"
+})
+```
 
 ## Debugging
 
@@ -172,20 +253,6 @@ npm run inspector
 
 The Inspector will provide a browser-based interface for monitoring requests and responses.
 
-## Docker Support
-
-A Docker image is available for containerized deployment:
-
-```bash
-# Build the Docker image
-docker build -t jericho-metabase-mcp-server .
-
-# Run the container with environment variables
-docker run -e METABASE_URL=https://your-metabase.com \
-           -e METABASE_API_KEY=your_api_key \
-           jericho-metabase-mcp-server
-```
-
 ## Security Considerations
 
 - We recommend using API key authentication for production environments
@@ -193,9 +260,6 @@ docker run -e METABASE_URL=https://your-metabase.com \
 - Consider using Docker secrets or environment variables instead of hardcoding credentials
 - Apply appropriate network security measures to restrict access to your Metabase instance
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Original Project
 
