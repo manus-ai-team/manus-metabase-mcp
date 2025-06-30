@@ -3,6 +3,49 @@
  */
 
 /**
+ * Minimal card interface containing only the fields needed by MCP operations
+ */
+export interface MinimalCard {
+  id: number;
+  name: string;
+  description?: string;
+  database_id: number;
+  dataset_query?: {
+    type?: string;
+    native?: {
+      query?: string;
+      template_tags?: Record<string, any>;
+    };
+  };
+  collection_id?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Strip unnecessary fields from card objects to improve memory usage and performance
+ * Only keeps fields that are actually used in MCP operations
+ */
+export function stripCardFields(card: any): MinimalCard {
+  return {
+    id: card.id,
+    name: card.name,
+    description: card.description || null,
+    database_id: card.database_id,
+    dataset_query: card.dataset_query ? {
+      type: card.dataset_query.type,
+      native: card.dataset_query.native ? {
+        query: card.dataset_query.native.query,
+        template_tags: card.dataset_query.native.template_tags
+      } : undefined
+    } : undefined,
+    collection_id: card.collection_id,
+    created_at: card.created_at,
+    updated_at: card.updated_at
+  };
+}
+
+/**
  * Calculate Levenshtein distance between two strings for fuzzy matching
  */
 export function calculateLevenshteinDistance(str1: string, str2: string): number {

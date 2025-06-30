@@ -37,6 +37,8 @@ import {
   generateExportMessage,
   performHybridSearch,
   performExactSearch,
+  MinimalCard,
+  stripCardFields,
 } from './utils.js';
 
 // Custom error enum
@@ -64,6 +66,8 @@ interface ApiError {
   message?: string;
   data?: { message?: string };
 }
+
+
 
 // Get Metabase configuration from environment variables
 const METABASE_URL = process.env.METABASE_URL;
@@ -109,7 +113,7 @@ class MetabaseServer {
     'Content-Type': 'application/json',
   };
   // Add caching for expensive operations
-  private cardsCache: { data: any[] | null; timestamp: number | null } = { data: null, timestamp: null };
+  private cardsCache: { data: MinimalCard[] | null; timestamp: number | null } = { data: null, timestamp: null };
   private readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
   private readonly REQUEST_TIMEOUT_MS = 30000; // 30 seconds timeout
 
@@ -268,8 +272,9 @@ class MetabaseServer {
 
   /**
    * Get all cards with caching to prevent repeated expensive API calls
+   * Strips unnecessary fields to improve memory usage and performance
    */
-  private async getAllCards(): Promise<any[]> {
+  private async getAllCards(): Promise<MinimalCard[]> {
     const now = Date.now();
 
     // Check if we have cached data that's still valid
@@ -284,15 +289,22 @@ class MetabaseServer {
     const startTime = Date.now();
 
     try {
-      const allCards = await this.request<any[]>('/api/card');
+      const rawCards = await this.request<any[]>('/api/card');
       const fetchTime = Date.now() - startTime;
 
-      // Update cache
-      this.cardsCache.data = allCards;
+      // Strip unnecessary fields to improve memory usage and performance
+      const strippedCards = rawCards.map(stripCardFields);
+      const originalSize = JSON.stringify(rawCards).length;
+      const strippedSize = JSON.stringify(strippedCards).length;
+      const sizeSavings = ((originalSize - strippedSize) / originalSize * 100).toFixed(1);
+
+      // Update cache with stripped data
+      this.cardsCache.data = strippedCards;
       this.cardsCache.timestamp = now;
 
-      this.logInfo(`Successfully fetched ${allCards.length} cards in ${fetchTime}ms`);
-      return allCards;
+      this.logInfo(`Successfully fetched ${rawCards.length} cards in ${fetchTime}ms`);
+      this.logDebug(`Field stripping reduced memory usage by ${sizeSavings}% (${originalSize} → ${strippedSize} bytes)`);
+      return strippedCards;
     } catch (error) {
       this.logError('Failed to fetch cards from Metabase API', error);
 
