@@ -112,8 +112,12 @@ class MetabaseServer {
   private headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  // Add caching for expensive operations
-  private cardsCache: { data: MinimalCard[] | null; timestamp: number | null } = { data: null, timestamp: null };
+  // Unified cache system - can serve both individual and bulk requests efficiently
+  private unifiedCardCache: Map<number, { data: any; timestamp: number }> = new Map();
+  private bulkCacheMetadata: { allCardsFetched: boolean; timestamp: number | null } = {
+    allCardsFetched: false,
+    timestamp: null
+  };
   private readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
   private readonly REQUEST_TIMEOUT_MS = 30000; // 30 seconds timeout
 
@@ -271,17 +275,17 @@ class MetabaseServer {
   }
 
   /**
-   * Get all cards with caching to prevent repeated expensive API calls
-   * Strips unnecessary fields to improve memory usage and performance
+   * Get all cards with unified caching - stores both full and minimal card data
+   * Uses a hybrid approach: stores full card data but returns minimal for search operations
    */
   private async getAllCards(): Promise<MinimalCard[]> {
     const now = Date.now();
 
     // Check if we have cached data that's still valid
-    if (this.cardsCache.data && this.cardsCache.timestamp &&
-        (now - this.cardsCache.timestamp) < this.CACHE_TTL_MS) {
-      this.logDebug(`Using cached cards data (${this.cardsCache.data.length} cards)`);
-      return this.cardsCache.data;
+    if (this.bulkCacheMetadata.allCardsFetched && this.bulkCacheMetadata.timestamp &&
+        (now - this.bulkCacheMetadata.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug(`Using cached cards data (${this.unifiedCardCache.size} cards)`);
+      return Array.from(this.unifiedCardCache.values()).map(item => stripCardFields(item.data));
     }
 
     // Cache is invalid or doesn't exist, fetch fresh data
@@ -292,26 +296,32 @@ class MetabaseServer {
       const rawCards = await this.request<any[]>('/api/card');
       const fetchTime = Date.now() - startTime;
 
-      // Strip unnecessary fields to improve memory usage and performance
+      // Store full card data in unified cache (so get_card_sql can use it)
+      // But return stripped data for search operations to maintain performance
+      rawCards.forEach(card => this.unifiedCardCache.set(card.id, {
+        data: card, // Store full card data
+        timestamp: now
+      }));
+
+      this.bulkCacheMetadata.allCardsFetched = true;
+      this.bulkCacheMetadata.timestamp = now;
+
+      // Return stripped cards for search operations
       const strippedCards = rawCards.map(stripCardFields);
       const originalSize = JSON.stringify(rawCards).length;
       const strippedSize = JSON.stringify(strippedCards).length;
       const sizeSavings = ((originalSize - strippedSize) / originalSize * 100).toFixed(1);
 
-      // Update cache with stripped data
-      this.cardsCache.data = strippedCards;
-      this.cardsCache.timestamp = now;
-
       this.logInfo(`Successfully fetched ${rawCards.length} cards in ${fetchTime}ms`);
-      this.logDebug(`Field stripping reduced memory usage by ${sizeSavings}% (${originalSize} → ${strippedSize} bytes)`);
+      this.logDebug(`Unified cache stores full data, search returns stripped data (${sizeSavings}% memory savings for search)`);
       return strippedCards;
     } catch (error) {
       this.logError('Failed to fetch cards from Metabase API', error);
 
       // If we have stale cached data, return it as fallback
-      if (this.cardsCache.data) {
+      if (this.bulkCacheMetadata.allCardsFetched) {
         this.logWarn('Using stale cached data as fallback due to API error');
-        return this.cardsCache.data;
+        return Array.from(this.unifiedCardCache.values()).map(item => stripCardFields(item.data));
       }
 
       throw error;
@@ -319,12 +329,65 @@ class MetabaseServer {
   }
 
   /**
-   * Clear the cards cache (useful for debugging or when data changes)
+   * Get a single card with unified caching - checks cache first, then API if needed
+   */
+  private async getCard(cardId: number): Promise<any> {
+    const now = Date.now();
+    const cached = this.unifiedCardCache.get(cardId);
+
+    // Check if we have cached data that's still valid
+    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug(`Using cached data for card ${cardId} (from ${this.bulkCacheMetadata.allCardsFetched ? 'bulk fetch' : 'individual fetch'})`);
+      return cached.data;
+    }
+
+    // If we don't have the specific card cached, but we have a recent bulk fetch,
+    // the card might not exist or we might have missed it
+    if (this.bulkCacheMetadata.allCardsFetched &&
+        this.bulkCacheMetadata.timestamp &&
+        (now - this.bulkCacheMetadata.timestamp) < this.CACHE_TTL_MS &&
+        !cached) {
+      this.logDebug(`Card ${cardId} not found in recent bulk cache - it may not exist`);
+      // Still try API call in case it's a newly created card
+    }
+
+    // Cache is invalid/doesn't exist, or card not in bulk cache - fetch fresh data
+    this.logDebug(`Fetching fresh data for card ${cardId} from Metabase API`);
+    const startTime = Date.now();
+
+    try {
+      const card = await this.request<any>(`/api/card/${cardId}`);
+      const fetchTime = Date.now() - startTime;
+
+      // Update unified cache with full card data
+      this.unifiedCardCache.set(cardId, {
+        data: card,
+        timestamp: now
+      });
+
+      this.logInfo(`Successfully fetched card ${cardId} in ${fetchTime}ms`);
+      return card;
+    } catch (error) {
+      this.logError(`Failed to fetch card ${cardId} from Metabase API`, error);
+
+      // If we have stale cached data, return it as fallback
+      if (cached) {
+        this.logWarn(`Using stale cached data for card ${cardId} as fallback due to API error`);
+        return cached.data;
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the unified cache (useful for debugging or when data changes)
    */
   private clearCardsCache(): void {
-    this.cardsCache.data = null;
-    this.cardsCache.timestamp = null;
-    this.logDebug('Cards cache cleared');
+    this.bulkCacheMetadata.allCardsFetched = false;
+    this.bulkCacheMetadata.timestamp = null;
+    this.unifiedCardCache.clear();
+    this.logDebug('Unified cache cleared');
   }
 
   /**
@@ -664,7 +727,7 @@ class MetabaseServer {
           },
           {
             name: 'get_card_sql',
-            description: '[RECOMMENDED] Get the SQL query and database details from a Metabase card/question. Uses cached data when available for better performance, with API fallback. Use this before execute_query to get the SQL you can modify.',
+            description: '[RECOMMENDED] Get the SQL query and database details from a Metabase card/question. Uses optimized unified caching for maximum efficiency - benefits from previous get_cards calls and caches individual requests. Use this before execute_query to get the SQL you can modify.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -764,12 +827,18 @@ class MetabaseServer {
             inputSchema: {
               type: 'object',
               properties: {
-                random_string: {
+                cache_type: {
                   type: 'string',
-                  description: 'Dummy parameter for no-parameter tools'
+                  enum: ['all', 'individual', 'bulk'],
+                  description: 'Type of cache to clear: "all" (default), "individual" (single card cache), or "bulk" (unified cache metadata)',
+                  default: 'all'
+                },
+                card_id: {
+                  type: 'number',
+                  description: 'Optional: Clear cache for specific card ID (only works with cache_type="individual")'
                 }
               },
-              required: ['random_string']
+              required: []
             }
           }
         ]
@@ -811,7 +880,7 @@ class MetabaseServer {
         case 'export_query':
           return this._handleExportQuery(request, requestId);
         case 'clear_cache':
-          return this._handleClearCache();
+          return this._handleClearCache(request);
         default:
           this.logWarn(`Received request for unknown tool: ${request.params?.name}`, { requestId });
           return {
@@ -1156,27 +1225,16 @@ class MetabaseServer {
 
     this.logDebug(`Fetching SQL details for card with ID: ${cardId}`);
 
-    let card: any = null;
-    let dataSource = 'api_call'; // Track where we got the data from
+    // Use unified caching system - may benefit from previous bulk fetch
+    const startTime = Date.now();
+    const card = await this.getCard(cardId);
+    const fetchTime = Date.now() - startTime;
 
-    // Optimization: First try to get card data from cached cards list
-    try {
-      const allCards = await this.getAllCards();
-      const cachedCard = allCards.find(c => c.id === cardId);
-
-      if (cachedCard) {
-        card = cachedCard;
-        dataSource = 'cache';
-        this.logDebug(`Found card ${cardId} in cached cards list, using cached data`);
-      }
-    } catch (cacheError) {
-      this.logWarn('Failed to retrieve card from cache, falling back to individual API call', { cardId }, cacheError as Error);
-    }
-
-    // Fallback: If not found in cache or cache failed, make individual API call
-    if (!card) {
-      this.logDebug(`Card ${cardId} not found in cache or cache unavailable, making individual API call`);
-      card = await this.request<any>(`/api/card/${cardId}`);
+    // Determine data source based on fetch time and cache state
+    let dataSource: string;
+    if (fetchTime < 5) {
+      dataSource = this.bulkCacheMetadata.allCardsFetched ? 'unified_cache_bulk' : 'unified_cache_individual';
+    } else {
       dataSource = 'api_call';
     }
 
@@ -1192,7 +1250,8 @@ class MetabaseServer {
       collection_id: card.collection_id,
       created_at: card.created_at,
       updated_at: card.updated_at,
-      data_source: dataSource // Include info about where data came from
+      data_source: dataSource,
+      fetch_time_ms: fetchTime
     };
 
     // Add guidance for AI agents
@@ -1203,13 +1262,15 @@ class MetabaseServer {
     }
 
     // Add performance info
-    if (dataSource === 'cache') {
-      result.performance_note = 'Data retrieved from cached cards list (faster)';
+    if (dataSource === 'unified_cache_bulk') {
+      result.performance_note = 'Data retrieved from unified cache (populated by previous get_cards call - optimal efficiency)';
+    } else if (dataSource === 'unified_cache_individual') {
+      result.performance_note = 'Data retrieved from unified cache (populated by previous get_card_sql call)';
     } else {
-      result.performance_note = 'Data retrieved via individual API call (fallback method)';
+      result.performance_note = 'Data retrieved via direct API call (now cached in unified cache for future requests)';
     }
 
-    this.logInfo(`Successfully retrieved SQL details for card: ${cardId} (source: ${dataSource})`);
+    this.logInfo(`Successfully retrieved SQL details for card: ${cardId} (source: ${dataSource}, ${fetchTime}ms)`);
     return {
       content: [{
         type: 'text',
@@ -1777,18 +1838,56 @@ class MetabaseServer {
     }
   }
 
-  private _handleClearCache() {
-    this.logDebug('Clearing cards cache');
-    this.clearCardsCache();
-    this.logInfo('Cards cache cleared successfully');
+  private _handleClearCache(request?: z.infer<typeof CallToolRequestSchema>) {
+    const cacheType = (request?.params?.arguments?.cache_type as string) || 'all';
+    const cardId = request?.params?.arguments?.card_id as number;
+
+    let message = '';
+    let cacheStatus = '';
+
+    switch (cacheType) {
+    case 'individual':
+      if (cardId) {
+        this.unifiedCardCache.delete(cardId);
+        message = `Individual card cache cleared for card ${cardId}`;
+        cacheStatus = `card_${cardId}_cache_empty`;
+      } else {
+        this.unifiedCardCache.clear();
+        message = 'All individual card caches cleared';
+        cacheStatus = 'individual_cache_empty';
+      }
+      break;
+
+    case 'bulk':
+      this.clearCardsCache();
+      message = 'Unified cache cleared (bulk metadata reset)';
+      cacheStatus = 'unified_cache_empty';
+      break;
+
+    case 'all':
+    default:
+      this.clearCardsCache();
+      message = 'Unified cache cleared successfully';
+      cacheStatus = 'unified_cache_empty';
+      break;
+    }
+
+    this.logInfo(message);
 
     return {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          message: 'Cards cache cleared successfully',
-          cache_status: 'empty',
-          next_fetch_will_be: 'fresh from API'
+          message,
+          cache_type: cacheType,
+          card_id: cardId || null,
+          cache_status: cacheStatus,
+          next_fetch_will_be: 'fresh from API',
+          cache_info: {
+            unified_cache_size: this.unifiedCardCache.size,
+            bulk_fetch_completed: this.bulkCacheMetadata.allCardsFetched,
+            cache_explanation: 'Unified cache serves both individual card requests and bulk operations efficiently'
+          }
         }, null, 2)
       }]
     };
