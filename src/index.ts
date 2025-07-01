@@ -530,19 +530,71 @@ class MetabaseServer {
       return {
         tools: [
           {
-            name: 'list_dashboards',
-            description: 'List all dashboards in Metabase',
+            name: 'get_cards',
+            description: 'Get all questions/cards in Metabase with optional search. When no query is provided, returns all cards. When query is provided, performs intelligent hybrid search (exact + substring + fuzzy matching).',
             inputSchema: {
               type: 'object',
-              properties: {}
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Optional search query - can be card name/description, exact ID, or SQL content to search for. If omitted, returns all cards.'
+                },
+                search_type: {
+                  type: 'string',
+                  enum: ['auto', 'id', 'exact'],
+                  description: "Type of search when query is provided: 'auto' for intelligent hybrid search (exact + substring + fuzzy), 'id' for exact ID match, 'exact' for exact phrase matching only",
+                  default: 'auto'
+                },
+                fuzzy_threshold: {
+                  type: 'number',
+                  description: 'Minimum similarity score for fuzzy matching in auto mode (0.0-1.0, default: 0.4). Higher values = stricter matching.',
+                  minimum: 0.0,
+                  maximum: 1.0,
+                  default: 0.4
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
+                }
+              },
+              required: []
             }
           },
           {
-            name: 'list_cards',
-            description: 'List all questions/cards in Metabase',
+            name: 'get_dashboards',
+            description: 'Get all dashboards in Metabase with optional search. When no query is provided, returns all dashboards. When query is provided, performs intelligent hybrid search (exact + substring + fuzzy matching).',
             inputSchema: {
               type: 'object',
-              properties: {}
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Optional search query - can be dashboard name/description or exact ID. If omitted, returns all dashboards.'
+                },
+                search_type: {
+                  type: 'string',
+                  enum: ['auto', 'id', 'exact'],
+                  description: "Type of search when query is provided: 'auto' for intelligent hybrid search (exact + substring + fuzzy), 'id' for exact ID match, 'exact' for exact phrase matching only",
+                  default: 'auto'
+                },
+                fuzzy_threshold: {
+                  type: 'number',
+                  description: 'Minimum similarity score for fuzzy matching in auto mode (0.0-1.0, default: 0.4). Higher values = stricter matching.',
+                  minimum: 0.0,
+                  maximum: 1.0,
+                  default: 0.4
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
+                }
+              },
+              required: []
             }
           },
           {
@@ -626,7 +678,7 @@ class MetabaseServer {
           },
           {
             name: 'search_cards',
-            description: '[FAST] Search for questions/cards using Metabase native search API. Searches name, description, and other metadata. For advanced fuzzy matching or SQL content search, use advanced_search_cards.',
+            description: '[FAST] Search for questions/cards using Metabase native search API. Searches name, description, and other metadata. For advanced fuzzy matching or SQL content search, use get_cards with search parameters.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -647,81 +699,13 @@ class MetabaseServer {
           },
           {
             name: 'search_dashboards',
-            description: '[FAST] Search for dashboards using Metabase native search API. Searches name, description, and other metadata. For advanced fuzzy matching, use advanced_search_dashboards.',
+            description: '[FAST] Search for dashboards using Metabase native search API. Searches name, description, and other metadata. For advanced fuzzy matching, use get_dashboards with search parameters.',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
                   description: 'Search query - searches across dashboard names, descriptions, and metadata'
-                },
-                max_results: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 50)',
-                  minimum: 1,
-                  maximum: 200,
-                  default: 50
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
-            name: 'advanced_search_cards',
-            description: '[ADVANCED] Search for questions/cards by name, description, ID, or query content with intelligent hybrid matching (exact + substring + fuzzy). Slower but more comprehensive than search_cards.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query - can be card name/description, exact ID, or SQL content to search for'
-                },
-                search_type: {
-                  type: 'string',
-                  enum: ['auto', 'id', 'exact'],
-                  description: "Type of search: 'auto' for intelligent hybrid search (exact + substring + fuzzy), 'id' for exact ID match, 'exact' for exact phrase matching only",
-                  default: 'auto'
-                },
-                fuzzy_threshold: {
-                  type: 'number',
-                  description: 'Minimum similarity score for fuzzy matching in auto mode (0.0-1.0, default: 0.4). Higher values = stricter matching.',
-                  minimum: 0.0,
-                  maximum: 1.0,
-                  default: 0.4
-                },
-                max_results: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 50)',
-                  minimum: 1,
-                  maximum: 200,
-                  default: 50
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
-            name: 'advanced_search_dashboards',
-            description: '[ADVANCED] Search for dashboards by name, description, or ID with intelligent hybrid matching (exact + substring + fuzzy). Slower but more comprehensive than search_dashboards.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query - can be dashboard name/description or exact ID'
-                },
-                search_type: {
-                  type: 'string',
-                  enum: ['auto', 'id', 'exact'],
-                  description: "Type of search: 'auto' for intelligent hybrid search (exact + substring + fuzzy), 'id' for exact ID match, 'exact' for exact phrase matching only",
-                  default: 'auto'
-                },
-                fuzzy_threshold: {
-                  type: 'number',
-                  description: 'Minimum similarity score for fuzzy matching in auto mode (0.0-1.0, default: 0.4). Higher values = stricter matching.',
-                  minimum: 0.0,
-                  maximum: 1.0,
-                  default: 0.4
                 },
                 max_results: {
                   type: 'number',
@@ -805,10 +789,10 @@ class MetabaseServer {
 
       try {
         switch (request.params?.name) {
-        case 'list_dashboards':
-          return this._handleListDashboards();
-        case 'list_cards':
-          return this._handleListCards();
+        case 'get_cards':
+          return this._handleGetCards(request, requestId);
+        case 'get_dashboards':
+          return this._handleGetDashboards(request, requestId);
         case 'list_databases':
           return this._handleListDatabases();
         case 'get_card_sql':
@@ -823,10 +807,7 @@ class MetabaseServer {
           return this._handleFastSearchCards(request, requestId);
         case 'search_dashboards':
           return this._handleFastSearchDashboards(request, requestId);
-        case 'advanced_search_cards':
-          return this._handleAdvancedSearchCards(request, requestId);
-        case 'advanced_search_dashboards':
-          return this._handleAdvancedSearchDashboards(request, requestId);
+
         case 'export_query':
           return this._handleExportQuery(request, requestId);
         case 'clear_cache':
@@ -859,28 +840,293 @@ class MetabaseServer {
     });
   }
 
-  private async _handleListDashboards() {
-    this.logDebug('Fetching all dashboards from Metabase');
-    const response = await this.request<any[]>('/api/dashboard');
-    this.logInfo(`Successfully retrieved ${response.length} dashboards`);
+  private async _handleGetCards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
+    const searchQuery = request.params?.arguments?.query as string;
+    const searchType = (request.params?.arguments?.search_type as string) || 'auto';
+    const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
+    const maxResults = (request.params?.arguments?.max_results as number) || 50;
+
+    if (!searchQuery) {
+      this.logDebug('Fetching all cards from Metabase', { requestId });
+    } else {
+      this.logDebug(`Searching for cards with query: "${searchQuery}" (type: ${searchType}, fuzzy_threshold: ${fuzzyThreshold})`, { requestId });
+    }
+
+    // Fetch all cards using cached method
+    const fetchStartTime = Date.now();
+    const allCards = await this.getAllCards();
+    const fetchTime = Date.now() - fetchStartTime;
+
+    let results: any[] = [];
+    let searchTime = 0;
+    let effectiveSearchType = searchType;
+
+    if (!searchQuery) {
+      // No search query provided, return all cards
+      results = allCards.slice(0, maxResults);
+      effectiveSearchType = 'all';
+      this.logInfo(`Retrieved ${results.length} cards (all cards)`);
+    } else {
+      // Search query provided, perform search
+      const searchStartTime = Date.now();
+
+      // Determine search type
+      const isNumeric = /^\d+$/.test(searchQuery.trim());
+
+      if (searchType === 'auto') {
+        // Auto-detect search type based on query content
+        if (isNumeric) {
+          effectiveSearchType = 'id';
+        } else {
+          // Default to intelligent hybrid search
+          effectiveSearchType = 'auto';
+        }
+      }
+
+      if (effectiveSearchType === 'id') {
+        const targetId = parseInt(searchQuery.trim(), 10);
+        results = allCards.filter(card => card.id === targetId);
+        this.logInfo(`Found ${results.length} cards matching ID: ${targetId}`);
+      } else if (effectiveSearchType === 'exact') {
+        // Exact phrase search
+        const exactResults = performExactSearch(
+          allCards,
+          searchQuery,
+          (card) => ({
+            name: card.name,
+            description: card.description,
+            sql: card.dataset_query?.native?.query
+          }),
+          maxResults
+        );
+        results = exactResults;
+        this.logInfo(`Found ${results.length} cards with exact phrase matching: "${searchQuery}"`);
+      } else {
+        // Auto: Intelligent hybrid search (exact + substring + fuzzy)
+        const hybridResults = performHybridSearch(
+          allCards,
+          searchQuery,
+          (card) => ({
+            name: card.name,
+            description: card.description,
+            sql: card.dataset_query?.native?.query
+          }),
+          fuzzyThreshold,
+          maxResults
+        );
+        results = hybridResults;
+        this.logInfo(`Found ${results.length} cards using intelligent hybrid search (exact + substring + fuzzy)`);
+      }
+
+      searchTime = Date.now() - searchStartTime;
+    }
+
+    // Enhance results with SQL preview and search matching info
+    const enhancedResults = results.map(card => {
+      const baseCard = {
+        ...card,
+        has_sql: !!(card.dataset_query?.native?.query),
+        sql_preview: card.dataset_query?.native?.query ?
+          card.dataset_query.native.query.substring(0, 200) + (card.dataset_query.native.query.length > 200 ? '...' : '') :
+          null,
+        recommended_action: card.dataset_query?.native?.query ?
+          `Use get_card_sql(${card.id}) then execute_query() for reliable execution` :
+          'This card uses GUI query builder - execute_card may be needed'
+      };
+
+      // Add search matching info based on search type
+      if (effectiveSearchType === 'auto' && 'search_score' in card) {
+        return {
+          ...baseCard,
+          search_score: card.search_score,
+          match_type: card.match_type,
+          matched_field: card.matched_field,
+          match_quality: card.search_score > 0.9 ? 'excellent' :
+            card.search_score > 0.8 ? 'very good' :
+              card.search_score > 0.6 ? 'good' : 'moderate'
+        };
+      } else if (effectiveSearchType === 'exact' && 'matched_field' in card) {
+        return {
+          ...baseCard,
+          matched_field: card.matched_field,
+          match_type: 'exact'
+        };
+      }
+
+      return baseCard;
+    });
 
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify(response, null, 2)
+        text: JSON.stringify({
+          search_query: searchQuery || null,
+          search_type: effectiveSearchType,
+          fuzzy_threshold: effectiveSearchType === 'fuzzy' ? fuzzyThreshold : undefined,
+          total_results: results.length,
+          performance_info: {
+            fetch_time_ms: fetchTime,
+            search_time_ms: searchTime,
+            total_cards_searched: allCards.length,
+            cache_used: fetchTime < 1000, // Assume cache was used if fetch was very fast
+            search_method_used: effectiveSearchType
+          },
+          recommended_workflow: 'For cards with SQL: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
+          search_info: effectiveSearchType === 'all' ? {
+            explanation: 'Retrieved all available cards (no search query provided). Results limited by max_results parameter.',
+            result_limit: maxResults,
+            total_available: allCards.length
+          } : effectiveSearchType === 'auto' ? {
+            explanation: 'Intelligent hybrid search combining exact matches, substring matches, and fuzzy matching. Results ranked by relevance score.',
+            fuzzy_threshold_used: fuzzyThreshold,
+            scoring: 'excellent (>0.9), very good (0.8-0.9), good (0.6-0.8), moderate (0.4-0.6)',
+            fields_searched: ['name', 'description', 'sql_content'],
+            match_types: ['exact', 'substring', 'fuzzy']
+          } : effectiveSearchType === 'exact' ? {
+            explanation: 'Exact phrase matching across all searchable fields.',
+            fields_searched: ['name', 'description', 'sql_content']
+          } : undefined,
+          results: enhancedResults
+        }, null, 2)
       }]
     };
   }
 
-  private async _handleListCards() {
-    this.logDebug('Fetching all cards/questions from Metabase');
-    const response = await this.getAllCards();
-    this.logInfo(`Successfully retrieved ${response.length} cards/questions`);
+  private async _handleGetDashboards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
+    const searchQuery = request.params?.arguments?.query as string;
+    const searchType = (request.params?.arguments?.search_type as string) || 'auto';
+    const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
+    const maxResults = (request.params?.arguments?.max_results as number) || 50;
+
+    if (!searchQuery) {
+      this.logDebug('Fetching all dashboards from Metabase', { requestId });
+    } else {
+      this.logDebug(`Searching for dashboards with query: "${searchQuery}" (type: ${searchType}, fuzzy_threshold: ${fuzzyThreshold})`, { requestId });
+    }
+
+    // Fetch all dashboards first
+    const fetchStartTime = Date.now();
+    const allDashboards = await this.request<any[]>('/api/dashboard');
+    const fetchTime = Date.now() - fetchStartTime;
+
+    let results: any[] = [];
+    let searchTime = 0;
+    let effectiveSearchType = searchType;
+
+    if (!searchQuery) {
+      // No search query provided, return all dashboards
+      results = allDashboards.slice(0, maxResults);
+      effectiveSearchType = 'all';
+      this.logInfo(`Retrieved ${results.length} dashboards (all dashboards)`);
+    } else {
+      // Search query provided, perform search
+      const searchStartTime = Date.now();
+
+      // Determine search type
+      const isNumeric = /^\d+$/.test(searchQuery.trim());
+
+      if (searchType === 'auto') {
+        // Auto-detect search type based on query content
+        if (isNumeric) {
+          effectiveSearchType = 'id';
+        } else {
+          // Default to intelligent hybrid search
+          effectiveSearchType = 'auto';
+        }
+      }
+
+      if (effectiveSearchType === 'id') {
+        const targetId = parseInt(searchQuery.trim(), 10);
+        results = allDashboards.filter(dashboard => dashboard.id === targetId);
+        this.logInfo(`Found ${results.length} dashboards matching ID: ${targetId}`);
+      } else if (effectiveSearchType === 'exact') {
+        // Exact phrase search
+        const exactResults = performExactSearch(
+          allDashboards,
+          searchQuery,
+          (dashboard) => ({
+            name: dashboard.name,
+            description: dashboard.description
+          }),
+          maxResults
+        );
+        results = exactResults;
+        this.logInfo(`Found ${results.length} dashboards with exact phrase matching: "${searchQuery}"`);
+      } else {
+        // Auto: Intelligent hybrid search (exact + substring + fuzzy)
+        const hybridResults = performHybridSearch(
+          allDashboards,
+          searchQuery,
+          (dashboard) => ({
+            name: dashboard.name,
+            description: dashboard.description
+          }),
+          fuzzyThreshold,
+          maxResults
+        );
+        results = hybridResults;
+        this.logInfo(`Found ${results.length} dashboards using intelligent hybrid search (exact + substring + fuzzy)`);
+      }
+
+      searchTime = Date.now() - searchStartTime;
+    }
+
+    // Enhance results with search matching info
+    const enhancedResults = results.map(dashboard => {
+      const baseDashboard = { ...dashboard };
+
+      // Add search matching info based on search type
+      if (effectiveSearchType === 'auto' && 'search_score' in dashboard) {
+        return {
+          ...baseDashboard,
+          search_score: dashboard.search_score,
+          match_type: dashboard.match_type,
+          matched_field: dashboard.matched_field,
+          match_quality: dashboard.search_score > 0.9 ? 'excellent' :
+            dashboard.search_score > 0.8 ? 'very good' :
+              dashboard.search_score > 0.6 ? 'good' : 'moderate'
+        };
+      } else if (effectiveSearchType === 'exact' && 'matched_field' in dashboard) {
+        return {
+          ...baseDashboard,
+          matched_field: dashboard.matched_field,
+          match_type: 'exact'
+        };
+      }
+
+      return baseDashboard;
+    });
 
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify(response, null, 2)
+        text: JSON.stringify({
+          search_query: searchQuery || null,
+          search_type: effectiveSearchType,
+          fuzzy_threshold: effectiveSearchType === 'fuzzy' ? fuzzyThreshold : undefined,
+          total_results: results.length,
+          performance_info: {
+            fetch_time_ms: fetchTime,
+            search_time_ms: searchTime,
+            total_dashboards_searched: allDashboards.length,
+            search_method_used: effectiveSearchType
+          },
+          search_info: effectiveSearchType === 'all' ? {
+            explanation: 'Retrieved all available dashboards (no search query provided). Results limited by max_results parameter.',
+            result_limit: maxResults,
+            total_available: allDashboards.length
+          } : effectiveSearchType === 'auto' ? {
+            explanation: 'Intelligent hybrid search combining exact matches, substring matches, and fuzzy matching. Results ranked by relevance score.',
+            fuzzy_threshold_used: fuzzyThreshold,
+            scoring: 'excellent (>0.9), very good (0.8-0.9), good (0.6-0.8), moderate (0.4-0.6)',
+            fields_searched: ['name', 'description'],
+            match_types: ['exact', 'substring', 'fuzzy']
+          } : effectiveSearchType === 'exact' ? {
+            explanation: 'Exact phrase matching across all searchable fields.',
+            fields_searched: ['name', 'description']
+          } : undefined,
+          results: enhancedResults
+        }, null, 2)
       }]
     };
   }
@@ -1161,7 +1407,7 @@ class MetabaseServer {
               search_method: 'server_side_native'
             },
             recommended_workflow: 'For cards: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
-            note: 'This uses Metabase native search API for fast results. For advanced fuzzy matching or SQL content search, use advanced_search_cards.',
+            note: 'This uses Metabase native search API for fast results. For advanced fuzzy matching or SQL content search, use get_cards with search parameters.',
             results: enhancedResults
           }, null, 2)
         }]
@@ -1236,7 +1482,7 @@ class MetabaseServer {
               api_endpoint: '/api/search',
               search_method: 'server_side_native'
             },
-            note: 'This uses Metabase native search API for fast results. For advanced fuzzy matching, use advanced_search_dashboards.',
+            note: 'This uses Metabase native search API for fast results. For advanced fuzzy matching, use get_dashboards with search parameters.',
             results: enhancedResults
           }, null, 2)
         }]
@@ -1250,276 +1496,7 @@ class MetabaseServer {
     }
   }
 
-  private async _handleAdvancedSearchCards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
-    const searchQuery = request.params?.arguments?.query as string;
-    const searchType = (request.params?.arguments?.search_type as string) || 'auto';
-    const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
-    const maxResults = (request.params?.arguments?.max_results as number) || 50;
 
-    if (!searchQuery) {
-      this.logWarn('Missing query parameter in search_cards request', { requestId });
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        'Search query parameter is required'
-      );
-    }
-
-    this.logDebug(`Searching for cards with query: "${searchQuery}" (type: ${searchType}, fuzzy_threshold: ${fuzzyThreshold})`);
-
-    // Fetch all cards using cached method
-    const fetchStartTime = Date.now();
-    const allCards = await this.getAllCards();
-    const fetchTime = Date.now() - fetchStartTime;
-
-    let results: any[] = [];
-    const searchStartTime = Date.now();
-
-    // Determine search type
-    const isNumeric = /^\d+$/.test(searchQuery.trim());
-    let effectiveSearchType = searchType;
-
-    if (searchType === 'auto') {
-      // Auto-detect search type based on query content
-      if (isNumeric) {
-        effectiveSearchType = 'id';
-      } else {
-        // Default to intelligent hybrid search
-        effectiveSearchType = 'auto';
-      }
-    }
-
-    if (effectiveSearchType === 'id') {
-      const targetId = parseInt(searchQuery.trim(), 10);
-      results = allCards.filter(card => card.id === targetId);
-      this.logInfo(`Found ${results.length} cards matching ID: ${targetId}`);
-    } else if (effectiveSearchType === 'exact') {
-      // Exact phrase search
-      const exactResults = performExactSearch(
-        allCards,
-        searchQuery,
-        (card) => ({
-          name: card.name,
-          description: card.description,
-          sql: card.dataset_query?.native?.query
-        }),
-        maxResults
-      );
-      results = exactResults;
-      this.logInfo(`Found ${results.length} cards with exact phrase matching: "${searchQuery}"`);
-    } else {
-      // Auto: Intelligent hybrid search (exact + substring + fuzzy)
-      const hybridResults = performHybridSearch(
-        allCards,
-        searchQuery,
-        (card) => ({
-          name: card.name,
-          description: card.description,
-          sql: card.dataset_query?.native?.query
-        }),
-        fuzzyThreshold,
-        maxResults
-      );
-      results = hybridResults;
-      this.logInfo(`Found ${results.length} cards using intelligent hybrid search (exact + substring + fuzzy)`);
-    }
-
-    const searchTime = Date.now() - searchStartTime;
-
-    // Enhance results with SQL preview and search matching info
-    const enhancedResults = results.map(card => {
-      const baseCard = {
-        ...card,
-        has_sql: !!(card.dataset_query?.native?.query),
-        sql_preview: card.dataset_query?.native?.query ?
-          card.dataset_query.native.query.substring(0, 200) + (card.dataset_query.native.query.length > 200 ? '...' : '') :
-          null,
-        recommended_action: card.dataset_query?.native?.query ?
-          `Use get_card_sql(${card.id}) then execute_query() for reliable execution` :
-          'This card uses GUI query builder - execute_card may be needed'
-      };
-
-      // Add search matching info based on search type
-      if (effectiveSearchType === 'auto' && 'search_score' in card) {
-        return {
-          ...baseCard,
-          search_score: card.search_score,
-          match_type: card.match_type,
-          matched_field: card.matched_field,
-          match_quality: card.search_score > 0.9 ? 'excellent' :
-            card.search_score > 0.8 ? 'very good' :
-              card.search_score > 0.6 ? 'good' : 'moderate'
-        };
-      } else if (effectiveSearchType === 'exact' && 'matched_field' in card) {
-        return {
-          ...baseCard,
-          matched_field: card.matched_field,
-          match_type: 'exact'
-        };
-      }
-
-      return baseCard;
-    });
-
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          search_query: searchQuery,
-          search_type: effectiveSearchType,
-          fuzzy_threshold: effectiveSearchType === 'fuzzy' ? fuzzyThreshold : undefined,
-          total_results: results.length,
-          performance_info: {
-            fetch_time_ms: fetchTime,
-            search_time_ms: searchTime,
-            total_cards_searched: allCards.length,
-            cache_used: fetchTime < 1000, // Assume cache was used if fetch was very fast
-            search_method_used: effectiveSearchType
-          },
-          recommended_workflow: 'For cards with SQL: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
-          search_info: effectiveSearchType === 'auto' ? {
-            explanation: 'Intelligent hybrid search combining exact matches, substring matches, and fuzzy matching. Results ranked by relevance score.',
-            fuzzy_threshold_used: fuzzyThreshold,
-            scoring: 'excellent (>0.9), very good (0.8-0.9), good (0.6-0.8), moderate (0.4-0.6)',
-            fields_searched: ['name', 'description', 'sql_content'],
-            match_types: ['exact', 'substring', 'fuzzy']
-          } : effectiveSearchType === 'exact' ? {
-            explanation: 'Exact phrase matching across all searchable fields.',
-            fields_searched: ['name', 'description', 'sql_content']
-          } : undefined,
-          results: enhancedResults
-        }, null, 2)
-      }]
-    };
-  }
-
-  private async _handleAdvancedSearchDashboards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
-    const searchQuery = request.params?.arguments?.query as string;
-    const searchType = (request.params?.arguments?.search_type as string) || 'auto';
-    const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
-    const maxResults = (request.params?.arguments?.max_results as number) || 50;
-
-    if (!searchQuery) {
-      this.logWarn('Missing query parameter in search_dashboards request', { requestId });
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        'Search query parameter is required'
-      );
-    }
-
-    this.logDebug(`Searching for dashboards with query: "${searchQuery}" (type: ${searchType}, fuzzy_threshold: ${fuzzyThreshold})`);
-
-    // Fetch all dashboards first
-    const fetchStartTime = Date.now();
-    const allDashboards = await this.request<any[]>('/api/dashboard');
-    const fetchTime = Date.now() - fetchStartTime;
-
-    let results: any[] = [];
-    const searchStartTime = Date.now();
-
-    // Determine search type
-    const isNumeric = /^\d+$/.test(searchQuery.trim());
-    let effectiveSearchType = searchType;
-
-    if (searchType === 'auto') {
-      // Auto-detect search type based on query content
-      if (isNumeric) {
-        effectiveSearchType = 'id';
-      } else {
-        // Default to intelligent hybrid search
-        effectiveSearchType = 'auto';
-      }
-    }
-
-    if (effectiveSearchType === 'id') {
-      const targetId = parseInt(searchQuery.trim(), 10);
-      results = allDashboards.filter(dashboard => dashboard.id === targetId);
-      this.logInfo(`Found ${results.length} dashboards matching ID: ${targetId}`);
-    } else if (effectiveSearchType === 'exact') {
-      // Exact phrase search
-      const exactResults = performExactSearch(
-        allDashboards,
-        searchQuery,
-        (dashboard) => ({
-          name: dashboard.name,
-          description: dashboard.description
-        }),
-        maxResults
-      );
-      results = exactResults;
-      this.logInfo(`Found ${results.length} dashboards with exact phrase matching: "${searchQuery}"`);
-    } else {
-      // Auto: Intelligent hybrid search (exact + substring + fuzzy)
-      const hybridResults = performHybridSearch(
-        allDashboards,
-        searchQuery,
-        (dashboard) => ({
-          name: dashboard.name,
-          description: dashboard.description
-        }),
-        fuzzyThreshold,
-        maxResults
-      );
-      results = hybridResults;
-      this.logInfo(`Found ${results.length} dashboards using intelligent hybrid search (exact + substring + fuzzy)`);
-    }
-
-    const searchTime = Date.now() - searchStartTime;
-
-    // Enhance results with search matching info
-    const enhancedResults = results.map(dashboard => {
-      const baseDashboard = { ...dashboard };
-
-      // Add search matching info based on search type
-      if (effectiveSearchType === 'auto' && 'search_score' in dashboard) {
-        return {
-          ...baseDashboard,
-          search_score: dashboard.search_score,
-          match_type: dashboard.match_type,
-          matched_field: dashboard.matched_field,
-          match_quality: dashboard.search_score > 0.9 ? 'excellent' :
-            dashboard.search_score > 0.8 ? 'very good' :
-              dashboard.search_score > 0.6 ? 'good' : 'moderate'
-        };
-      } else if (effectiveSearchType === 'exact' && 'matched_field' in dashboard) {
-        return {
-          ...baseDashboard,
-          matched_field: dashboard.matched_field,
-          match_type: 'exact'
-        };
-      }
-
-      return baseDashboard;
-    });
-
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          search_query: searchQuery,
-          search_type: effectiveSearchType,
-          fuzzy_threshold: effectiveSearchType === 'fuzzy' ? fuzzyThreshold : undefined,
-          total_results: results.length,
-          performance_info: {
-            fetch_time_ms: fetchTime,
-            search_time_ms: searchTime,
-            total_dashboards_searched: allDashboards.length,
-            search_method_used: effectiveSearchType
-          },
-          search_info: effectiveSearchType === 'auto' ? {
-            explanation: 'Intelligent hybrid search combining exact matches, substring matches, and fuzzy matching. Results ranked by relevance score.',
-            fuzzy_threshold_used: fuzzyThreshold,
-            scoring: 'excellent (>0.9), very good (0.8-0.9), good (0.6-0.8), moderate (0.4-0.6)',
-            fields_searched: ['name', 'description'],
-            match_types: ['exact', 'substring', 'fuzzy']
-          } : effectiveSearchType === 'exact' ? {
-            explanation: 'Exact phrase matching across all searchable fields.',
-            fields_searched: ['name', 'description']
-          } : undefined,
-          results: enhancedResults
-        }, null, 2)
-      }]
-    };
-  }
 
   private async _handleExportQuery(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
     const databaseId = request.params?.arguments?.database_id as number;
