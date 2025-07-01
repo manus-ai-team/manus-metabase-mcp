@@ -11,7 +11,7 @@
 
 import { MetabaseServer } from './server.js';
 
-// Add global error handlers
+// Global error handlers for uncaught exceptions
 process.on('uncaughtException', (error: Error) => {
   console.error(JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -33,6 +33,7 @@ process.on('unhandledRejection', (reason: unknown, _promise: Promise<unknown>) =
   }));
 });
 
+// Start the Metabase MCP Server
 const server = new MetabaseServer();
 server.run().catch(error => {
   console.error(JSON.stringify({

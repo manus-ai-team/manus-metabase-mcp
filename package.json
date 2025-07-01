@@ -15,7 +15,7 @@
     "build"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\" && mkdir -p dist && cp build/index.js dist/index.js",
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\" && mkdir -p dist && cp -r build/* dist/",
     "build:clean": "rm -rf build dist && npm run build",
     "prepare": "npm run build",
     "watch": "tsc --watch",
