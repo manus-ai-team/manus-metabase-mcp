@@ -13,7 +13,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   CACHE_TTL_MS: z.string().transform(val => parseInt(val, 10)).pipe(z.number().positive()).default('600000'), // 10 minutes
-  REQUEST_TIMEOUT_MS: z.string().transform(val => parseInt(val, 10)).pipe(z.number().positive()).default('30000'), // 30 seconds
+  REQUEST_TIMEOUT_MS: z.string().transform(val => parseInt(val, 10)).pipe(z.number().positive()).default('600000'), // 10 minutes
 }).refine(
   (data) => data.METABASE_API_KEY || (data.METABASE_USER_EMAIL && data.METABASE_PASSWORD),
   {
