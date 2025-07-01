@@ -33,8 +33,6 @@ import * as os from 'os';
 import {
   generateRequestId,
   sanitizeFilename,
-  toBooleanSafe,
-  generateExportMessage,
   performHybridSearch,
   performExactSearch,
   MinimalCard,
@@ -744,7 +742,7 @@ class MetabaseServer {
           },
           {
             name: 'execute_query',
-            description: '[RECOMMENDED] Execute a SQL query against a Metabase database. This is the preferred method for running queries as it provides better control and reliability than execute_card.',
+            description: '[RECOMMENDED] Execute a SQL query against a Metabase database. This is the preferred method for running queries as it provides better control and reliability than execute_card. Results are limited to improve performance for AI agents - use export_query for larger datasets.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -758,10 +756,15 @@ class MetabaseServer {
                 },
                 native_parameters: {
                   type: 'array',
-                  description: 'Optional parameters for the query',
-                  items: {
-                    type: 'object'
-                  }
+                  items: { type: 'object' },
+                  description: 'Optional parameters for the query'
+                },
+                row_limit: {
+                  type: 'number',
+                  description: 'Maximum number of rows to return (default: 500, max: 2000). If the query has an existing LIMIT clause that is more restrictive (lower), the existing limit will be preserved. For larger datasets, use export_query instead.',
+                  default: 500,
+                  minimum: 1,
+                  maximum: 2000
                 }
               },
               required: ['database_id', 'query']
@@ -783,7 +786,7 @@ class MetabaseServer {
           },
           {
             name: 'export_query',
-            description: '[ADVANCED] Export large SQL query results using Metabase export endpoints (supports up to 1M rows vs 2K limit of execute_query). Returns data in specified format (CSV, JSON, or XLSX).',
+            description: '[ADVANCED] Export large SQL query results using Metabase export endpoints (supports up to 1M rows). Returns data in specified format (CSV, JSON, or XLSX) and automatically saves to Downloads/Metabase folder.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -807,11 +810,6 @@ class MetabaseServer {
                   items: {
                     type: 'object'
                   }
-                },
-                save_file: {
-                  type: 'boolean',
-                  description: 'Whether to automatically save the exported data to the Downloads folder',
-                  default: false
                 },
                 filename: {
                   type: 'string',
@@ -1382,6 +1380,8 @@ class MetabaseServer {
     const databaseId = request.params?.arguments?.database_id;
     const query = request.params?.arguments?.query;
     const nativeParameters = request.params?.arguments?.native_parameters || [];
+    const rowLimitArg = request.params?.arguments?.row_limit;
+    const rowLimit = typeof rowLimitArg === 'number' ? rowLimitArg : 500;
 
     if (!databaseId) {
       this.logWarn('Missing database_id parameter in execute_query request', { requestId });
@@ -1391,39 +1391,143 @@ class MetabaseServer {
       );
     }
 
-    if (!query) {
-      this.logWarn('Missing query parameter in execute_query request', { requestId });
+    if (!query || typeof query !== 'string') {
+      this.logWarn('Missing or invalid query parameter in execute_query request', { requestId });
       throw new McpError(
         ErrorCode.InvalidParams,
-        'SQL query parameter is required'
+        'SQL query parameter is required and must be a string'
       );
     }
 
-    this.logDebug(`Executing SQL query against database ID: ${databaseId}`);
+    // Validate row limit
+    if (rowLimit < 1 || rowLimit > 2000) {
+      this.logWarn(`Invalid row_limit parameter: ${rowLimit}. Must be between 1 and 2000.`, { requestId });
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'Row limit must be between 1 and 2000. For larger datasets, use export_query instead.'
+      );
+    }
+
+    this.logDebug(`Executing SQL query against database ID: ${databaseId} with row limit: ${rowLimit}`);
+
+    // Handle LIMIT clause: only override if our limit is more restrictive than existing limit
+    let limitedQuery = query.trim();
+    let finalLimit = rowLimit;
+
+    // Check for existing LIMIT clause
+    const limitRegex = /\bLIMIT\s+(\d+)\s*;?\s*$/i;
+    const limitMatch = limitedQuery.match(limitRegex);
+
+    if (limitMatch) {
+      const existingLimit = parseInt(limitMatch[1], 10);
+      this.logDebug(`Found existing LIMIT clause: ${existingLimit}, requested limit: ${rowLimit}`);
+
+      if (existingLimit <= rowLimit) {
+        // Existing limit is more restrictive, keep it
+        this.logDebug(`Keeping existing LIMIT ${existingLimit} as it's more restrictive than requested ${rowLimit}`);
+        finalLimit = existingLimit;
+        // Don't modify the query
+      } else {
+        // Our limit is more restrictive, replace the existing one
+        this.logDebug(`Replacing existing LIMIT ${existingLimit} with more restrictive limit ${rowLimit}`);
+        limitedQuery = limitedQuery.replace(limitRegex, '');
+        // We'll add our limit below
+      }
+    } else {
+      // Check for LIMIT in middle of query (less common but possible)
+      const midLimitRegex = /\bLIMIT\s+(\d+)/gi;
+      const midLimitMatches = [...limitedQuery.matchAll(midLimitRegex)];
+
+      if (midLimitMatches.length > 0) {
+        // Find the most restrictive existing limit
+        const existingLimits = midLimitMatches.map(match => parseInt(match[1], 10));
+        const minExistingLimit = Math.min(...existingLimits);
+
+        this.logDebug(`Found LIMIT clause(s) in query: ${existingLimits.join(', ')}, min: ${minExistingLimit}`);
+
+        if (minExistingLimit <= rowLimit) {
+          // Existing limit is more restrictive, keep the query as is
+          this.logDebug(`Keeping existing LIMIT clauses as minimum ${minExistingLimit} is more restrictive than requested ${rowLimit}`);
+          finalLimit = minExistingLimit;
+          // Don't modify the query
+        } else {
+          // Our limit is more restrictive, remove all existing LIMIT clauses
+          this.logDebug(`Removing existing LIMIT clauses and applying more restrictive limit ${rowLimit}`);
+          limitedQuery = limitedQuery.replace(midLimitRegex, '');
+          // We'll add our limit below
+        }
+      }
+    }
+
+    // Add our LIMIT clause only if we determined we need to override
+    if (finalLimit === rowLimit && (limitMatch || limitedQuery !== query.trim())) {
+      if (limitedQuery.endsWith(';')) {
+        limitedQuery = limitedQuery.slice(0, -1) + ` LIMIT ${rowLimit};`;
+      } else {
+        limitedQuery = limitedQuery + ` LIMIT ${rowLimit}`;
+      }
+    } else if (finalLimit === rowLimit && !limitMatch) {
+      // No existing limit found, add ours
+      if (limitedQuery.endsWith(';')) {
+        limitedQuery = limitedQuery.slice(0, -1) + ` LIMIT ${rowLimit};`;
+      } else {
+        limitedQuery = limitedQuery + ` LIMIT ${rowLimit}`;
+      }
+    }
 
     // Build query request body
     const queryData = {
       type: 'native',
       native: {
-        query: query,
+        query: limitedQuery,
         template_tags: {}
       },
       parameters: nativeParameters,
       database: databaseId
     };
 
-    const response = await this.request<any>('/api/dataset', {
-      method: 'POST',
-      body: JSON.stringify(queryData)
-    });
+    try {
+      const response = await this.request<any>('/api/dataset', {
+        method: 'POST',
+        body: JSON.stringify(queryData)
+      });
 
-    this.logInfo(`Successfully executed SQL query against database: ${databaseId}`);
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(response, null, 2)
-      }]
-    };
+      const rowCount = response?.data?.rows?.length || 0;
+      this.logInfo(`Successfully executed SQL query against database: ${databaseId}, returned ${rowCount} rows (limit: ${finalLimit})`);
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            query: query,
+            database_id: databaseId,
+            row_count: rowCount,
+            applied_limit: finalLimit,
+            data: response
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      const apiError = error as ApiError;
+      const errorMessage = apiError.data?.message || apiError.message || 'Unknown error';
+
+      this.logError(`Failed to execute query: ${errorMessage}`, error);
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: false,
+            message: "Query execution failed",
+            error: errorMessage,
+            query: query,
+            database_id: databaseId
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
   }
 
   private async _handleFastSearchCards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
@@ -1595,7 +1699,6 @@ class MetabaseServer {
     const query = request.params?.arguments?.query as string;
     const format = (request.params?.arguments?.format as string) || 'csv';
     const nativeParameters = request.params?.arguments?.native_parameters || [];
-    const saveFile = toBooleanSafe(request.params?.arguments?.save_file);
     const customFilename = request.params?.arguments?.filename as string;
 
     if (!databaseId) {
@@ -1677,183 +1780,147 @@ class MetabaseServer {
 
       // Handle different response types based on format
       let responseData;
-      if (format === 'json') {
-        responseData = await response.json();
-      } else if (format === 'csv') {
-        // For CSV, get as text
-        responseData = await response.text();
-      } else if (format === 'xlsx') {
-        // For XLSX, get as buffer for binary data
-        responseData = await response.arrayBuffer();
-      } else {
-        // Fallback to text
-        responseData = await response.text();
+      let rowCount: number | undefined = 0;
+      let fileSize = 0;
+
+      try {
+        if (format === 'json') {
+          responseData = await response.json();
+          // JSON export format might have different structures, let's be more flexible
+          if (responseData && typeof responseData === 'object') {
+            // Try different possible structures for row counting
+            rowCount = responseData?.data?.rows?.length ||
+                      responseData?.rows?.length ||
+                      (Array.isArray(responseData) ? responseData.length : 0);
+          }
+          this.logDebug(`JSON export row count: ${rowCount}`);
+        } else if (format === 'csv') {
+          responseData = await response.text();
+          // Count rows for CSV (subtract header row)
+          const rows = responseData.split('\n').filter((row: string) => row.trim());
+          rowCount = Math.max(0, rows.length - 1);
+          this.logDebug(`CSV export row count: ${rowCount}`);
+        } else if (format === 'xlsx') {
+          responseData = await response.arrayBuffer();
+          fileSize = responseData.byteLength;
+          // For XLSX, we can't easily count rows from ArrayBuffer
+          rowCount = undefined;
+          this.logDebug(`XLSX export file size: ${fileSize} bytes`);
+        }
+      } catch (parseError) {
+        this.logError(`Failed to parse ${format} response: ${parseError}`, parseError);
+        throw new Error(`Failed to parse ${format} response: ${parseError}`);
       }
 
-      this.logInfo(`Successfully exported query in ${format} format from database: ${databaseId}`);
-
-      if (format === 'json') {
-        // Count rows for user info (JSON format has different structure)
-        const rowCount = responseData?.data?.rows?.length || 0;
-        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        const sanitizedCustomFilename = sanitizeFilename(customFilename);
-        const baseFilename = sanitizedCustomFilename || `metabase_export_${timestamp}`;
-        const filename = `${baseFilename}.json`;
-
-        let fileSaveError: string | undefined;
-        let savedFilePath = '';
-
-        // Save file if requested
-        if (saveFile) {
-          try {
-            // Get Downloads directory path
-            const downloadsPath = path.join(os.homedir(), 'Downloads');
-            savedFilePath = path.join(downloadsPath, filename);
-
-            // Ensure Downloads directory exists
-            if (!fs.existsSync(downloadsPath)) {
-              fs.mkdirSync(downloadsPath, { recursive: true });
-            }
-
-            // Write the JSON file
-            fs.writeFileSync(savedFilePath, JSON.stringify(responseData, null, 2), 'utf8');
-          } catch (error) {
-            fileSaveError = error instanceof Error ? error.message : 'Unknown error';
-          }
-        }
-
-        const baseMessage = generateExportMessage(
-          format,
-          query,
-          databaseId,
-          rowCount,
-          '',
-          saveFile,
-          savedFilePath,
-          filename,
-          fileSaveError
-        );
-
+      // Validate that we have data before proceeding with file operations
+      // For XLSX, check file size; for others, check row count
+      const hasData = format === 'xlsx' ? fileSize > 100 : (rowCount && rowCount > 0);
+      if (!hasData) {
+        this.logWarn(`Query returned no data for export`, { requestId });
         return {
           content: [{
             type: 'text',
-            text: baseMessage + JSON.stringify(responseData, null, 2) + '\n```\n\nSuccess: Exported ' + rowCount.toLocaleString() + ' rows using Metabase\'s high-capacity export endpoint.\nAdvantage: This method supports up to 1 million rows vs. the 2,000 row limit of standard queries.'
+            text: JSON.stringify({
+              success: false,
+              message: "Query executed successfully but returned no data to export",
+              query: query,
+              database_id: databaseId,
+              format: format,
+              row_count: rowCount
+            }, null, 2)
           }]
         };
-      } else if (format === 'csv') {
-        // Count rows for user info
-        const rows = responseData.split('\n').filter((row: string) => row.trim());
-        const rowCount = Math.max(0, rows.length - 1); // Subtract header row
-        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        const sanitizedCustomFilename = sanitizeFilename(customFilename);
-        const baseFilename = sanitizedCustomFilename || `metabase_export_${timestamp}`;
-        const filename = `${baseFilename}.csv`;
+      }
 
-        let fileSaveError: string | undefined;
-        let savedFilePath = '';
+      // Always save files to Downloads/Metabase directory
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      const sanitizedCustomFilename = sanitizeFilename(customFilename);
+      const baseFilename = sanitizedCustomFilename || `metabase_export_${timestamp}`;
+      const filename = `${baseFilename}.${format}`;
 
-        // Save file if requested
-        if (saveFile) {
-          try {
-            // Get Downloads directory path
-            const downloadsPath = path.join(os.homedir(), 'Downloads');
-            savedFilePath = path.join(downloadsPath, filename);
+      // Create Metabase subdirectory in Downloads
+      const downloadsPath = path.join(os.homedir(), 'Downloads', 'Metabase');
+      const savedFilePath = path.join(downloadsPath, filename);
 
-            // Ensure Downloads directory exists
-            if (!fs.existsSync(downloadsPath)) {
-              fs.mkdirSync(downloadsPath, { recursive: true });
-            }
+      let fileSaveError: string | undefined;
 
-            // Write the CSV file
-            fs.writeFileSync(savedFilePath, responseData, 'utf8');
-          } catch (error) {
-            fileSaveError = error instanceof Error ? error.message : 'Unknown error';
-          }
+      try {
+        // Ensure Downloads/Metabase directory exists
+        if (!fs.existsSync(downloadsPath)) {
+          fs.mkdirSync(downloadsPath, { recursive: true });
         }
 
-        const baseMessage = generateExportMessage(
-          format,
-          query,
-          databaseId,
-          rowCount,
-          '',
-          saveFile,
-          savedFilePath,
-          filename,
-          fileSaveError
-        );
-
-        return {
-          content: [{
-            type: 'text',
-            text: baseMessage + responseData + '\n```\n\nSuccess: Exported ' + rowCount.toLocaleString() + ' rows using Metabase\'s high-capacity export endpoint.\nAdvantage: This method supports up to 1 million rows vs. the 2,000 row limit of standard queries.'
-          }]
-        };
-      } else {
-        // For XLSX format, handle binary data
-        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        const sanitizedCustomFilename = sanitizeFilename(customFilename);
-        const baseFilename = sanitizedCustomFilename || `metabase_export_${timestamp}`;
-        const filename = `${baseFilename}.xlsx`;
-
-        let fileSaveError: string | undefined;
-        let savedFilePath = '';
-        let fileSize = 'Unknown';
-
-        // Save file if requested
-        if (saveFile) {
-          try {
-            // Get Downloads directory path
-            const downloadsPath = path.join(os.homedir(), 'Downloads');
-            savedFilePath = path.join(downloadsPath, filename);
-
-            // Ensure Downloads directory exists
-            if (!fs.existsSync(downloadsPath)) {
-              fs.mkdirSync(downloadsPath, { recursive: true });
-            }
-
-            // For XLSX, we need to handle binary data properly
-            // The response should be an ArrayBuffer
-            if (responseData instanceof ArrayBuffer) {
-              // Convert ArrayBuffer to Buffer for Node.js file writing
-              const buffer = Buffer.from(responseData);
-              fs.writeFileSync(savedFilePath, buffer);
-              fileSize = buffer.length.toLocaleString();
-            } else {
-              // Fallback for other data types
-              fs.writeFileSync(savedFilePath, responseData);
-              fileSize = 'Unknown size';
-            }
-          } catch (error) {
-            fileSaveError = error instanceof Error ? error.message : 'Unknown error';
-          }
-        } else {
+        // Write the file based on format and calculate file size
+        if (format === 'json') {
+          const jsonString = JSON.stringify(responseData, null, 2);
+          fs.writeFileSync(savedFilePath, jsonString, 'utf8');
+          fileSize = Buffer.byteLength(jsonString, 'utf8');
+        } else if (format === 'csv') {
+          fs.writeFileSync(savedFilePath, responseData, 'utf8');
+          fileSize = Buffer.byteLength(responseData, 'utf8');
+        } else if (format === 'xlsx') {
+          // Handle binary data for XLSX
           if (responseData instanceof ArrayBuffer) {
-            fileSize = responseData.byteLength.toLocaleString();
+            const buffer = Buffer.from(responseData);
+            fs.writeFileSync(savedFilePath, buffer);
+            fileSize = buffer.length;
           } else {
-            fileSize = 'Unknown size';
+            throw new Error('XLSX response is not in expected ArrayBuffer format');
           }
         }
 
-        const baseMessage = generateExportMessage(
-          format,
-          query,
-          databaseId,
-          0, // XLSX doesn't have easy row counting
-          fileSize,
-          saveFile,
-          savedFilePath,
-          filename,
-          fileSaveError
-        );
+        this.logInfo(`Successfully exported to ${savedFilePath}`);
+      } catch (saveError) {
+        fileSaveError = saveError instanceof Error ? saveError.message : 'Unknown file save error';
+        this.logError(`Failed to save export file: ${fileSaveError}`, saveError);
+      }
+
+      // Generate standardized JSON response
+      if (fileSaveError) {
+        const errorResponse: any = {
+          success: false,
+          message: "Export completed but failed to save file",
+          error: fileSaveError,
+          query: query,
+          database_id: databaseId,
+          format: format,
+          row_count: rowCount,
+          intended_file_path: savedFilePath
+        };
+
+        // Add file size for all formats
+        if (fileSize > 0) {
+          errorResponse.file_size_bytes = fileSize;
+        }
 
         return {
           content: [{
             type: 'text',
-            text: baseMessage + '\n\nSuccess: Excel file exported using Metabase\'s high-capacity export endpoint.\nAdvantage: This method supports up to 1 million rows vs. the 2,000 row limit of standard queries.'
-          }]
+            text: JSON.stringify(errorResponse, null, 2)
+          }],
+          isError: true
         };
       }
+
+      // Successful export - return standardized JSON response
+      const successResponse: any = {
+        success: true,
+        message: "Export completed successfully",
+        query: query,
+        file_path: savedFilePath,
+        filename: filename,
+        format: format,
+        row_count: rowCount,
+        database_id: databaseId,
+        file_size_bytes: fileSize
+      };
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(successResponse, null, 2)
+        }]
+      };
     } catch (error) {
       const apiError = error as ApiError;
       const errorMessage = apiError.data?.message || apiError.message || 'Unknown error';
@@ -1862,7 +1929,14 @@ class MetabaseServer {
       return {
         content: [{
           type: 'text',
-          text: `Failed to export query in ${format} format: ${errorMessage}\n\nNote: Make sure your query is valid and the database connection is working. The export endpoint supports up to 1 million rows.`
+          text: JSON.stringify({
+            success: false,
+            message: "Export failed",
+            error: errorMessage,
+            query: query,
+            database_id: databaseId,
+            format: format
+          }, null, 2)
         }],
         isError: true
       };
