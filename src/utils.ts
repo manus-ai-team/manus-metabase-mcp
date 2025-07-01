@@ -30,7 +30,7 @@ export function stripCardFields(card: any): MinimalCard {
   return {
     id: card.id,
     name: card.name,
-    description: card.description || null,
+    description: card.description || undefined,
     database_id: card.database_id,
     dataset_query: card.dataset_query ? {
       type: card.dataset_query.type,
