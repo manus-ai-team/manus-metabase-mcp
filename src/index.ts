@@ -31,93 +31,29 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
+  config,
+  authMethod,
+  AuthMethod,
+  LogLevel,
+} from './config.js';
+import {
   generateRequestId,
   sanitizeFilename,
   performHybridSearch,
   performExactSearch,
-  MinimalCard,
-  stripCardFields,
 } from './utils.js';
-
-// Custom error enum
-enum ErrorCode {
-  InternalError = 'internal_error',
-  InvalidRequest = 'invalid_request',
-  InvalidParams = 'invalid_params',
-  MethodNotFound = 'method_not_found'
-}
-
-// Custom error class
-class McpError extends Error {
-  code: ErrorCode;
-
-  constructor(code: ErrorCode, message: string) {
-    super(message);
-    this.code = code;
-    this.name = 'McpError';
-  }
-}
-
-// API error type definition
-interface ApiError {
-  status?: number;
-  message?: string;
-  data?: { message?: string };
-}
-
-
-
-// Get Metabase configuration from environment variables
-const METABASE_URL = process.env.METABASE_URL;
-const METABASE_USER_EMAIL = process.env.METABASE_USER_EMAIL;
-const METABASE_PASSWORD = process.env.METABASE_PASSWORD;
-const METABASE_API_KEY = process.env.METABASE_API_KEY;
-
-if (!METABASE_URL || (!METABASE_API_KEY && (!METABASE_USER_EMAIL || !METABASE_PASSWORD))) {
-  throw new Error('METABASE_URL is required, and either METABASE_API_KEY or both METABASE_USER_EMAIL and METABASE_PASSWORD must be provided');
-}
-
-// Create custom Schema object using z.object
-const ListResourceTemplatesRequestSchema = z.object({
-  method: z.literal('resources/list_templates')
-});
-
-const ListToolsRequestSchema = z.object({
-  method: z.literal('tools/list')
-});
-
-// Logger level enum
-enum LogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error',
-  FATAL = 'fatal'
-}
-
-// Authentication method enum
-enum AuthMethod {
-  SESSION = 'session',
-  API_KEY = 'api_key'
-}
+import {
+  ErrorCode,
+  McpError,
+  ApiError,
+  ListResourceTemplatesRequestSchema,
+  ListToolsRequestSchema,
+} from './types.js';
+import { MetabaseApiClient } from './api.js';
 
 class MetabaseServer {
   private server: Server;
-  private baseUrl: string;
-  private sessionToken: string | null = null;
-  private apiKey: string | null = null;
-  private authMethod: AuthMethod = METABASE_API_KEY ? AuthMethod.API_KEY : AuthMethod.SESSION;
-  private headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  // Unified cache system - can serve both individual and bulk requests efficiently
-  private unifiedCardCache: Map<number, { data: any; timestamp: number }> = new Map();
-  private bulkCacheMetadata: { allCardsFetched: boolean; timestamp: number | null } = {
-    allCardsFetched: false,
-    timestamp: null
-  };
-  private readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
-  private readonly REQUEST_TIMEOUT_MS = 30000; // 30 seconds timeout
+  private apiClient: MetabaseApiClient;
 
   constructor() {
     this.server = new Server(
@@ -133,13 +69,7 @@ class MetabaseServer {
       }
     );
 
-    this.baseUrl = METABASE_URL!;
-    if (METABASE_API_KEY) {
-      this.apiKey = METABASE_API_KEY;
-      this.logInfo('Using API Key authentication method');
-    } else {
-      this.logInfo('Using Session Token authentication method');
-    }
+    this.apiClient = new MetabaseApiClient();
 
     this.setupResourceHandlers();
     this.setupToolHandlers();
@@ -214,219 +144,7 @@ class MetabaseServer {
     this.log(LogLevel.FATAL, message, undefined, errorObj);
   }
 
-  /**
-   * HTTP request utility method with timeout support
-   */
-  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const url = new URL(path, this.baseUrl);
-    const headers = { ...this.headers };
 
-    // Add appropriate authentication headers based on the method
-    if (this.authMethod === AuthMethod.API_KEY && this.apiKey) {
-      // Use X-API-KEY header as specified in the Metabase documentation
-      headers['X-API-KEY'] = this.apiKey;
-    } else if (this.authMethod === AuthMethod.SESSION && this.sessionToken) {
-      headers['X-Metabase-Session'] = this.sessionToken;
-    }
-
-    this.logDebug(`Making request to ${url.toString()}`);
-    this.logDebug(`Using headers: ${JSON.stringify(headers)}`);
-
-    // Create abort controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(url.toString(), {
-        ...options,
-        headers,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = `API request failed with status ${response.status}: ${response.statusText}`;
-        this.logWarn(errorMessage, errorData);
-
-        throw {
-          status: response.status,
-          message: response.statusText,
-          data: errorData
-        };
-      }
-
-      this.logDebug(`Received successful response from ${path}`);
-      return response.json() as Promise<T>;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        this.logError(`Request to ${path} timed out after ${this.REQUEST_TIMEOUT_MS}ms`, error);
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Request timed out after ${this.REQUEST_TIMEOUT_MS / 1000} seconds`
-        );
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Get all cards with unified caching - stores both full and minimal card data
-   * Uses a hybrid approach: stores full card data but returns minimal for search operations
-   */
-  private async getAllCards(): Promise<MinimalCard[]> {
-    const now = Date.now();
-
-    // Check if we have cached data that's still valid
-    if (this.bulkCacheMetadata.allCardsFetched && this.bulkCacheMetadata.timestamp &&
-        (now - this.bulkCacheMetadata.timestamp) < this.CACHE_TTL_MS) {
-      this.logDebug(`Using cached cards data (${this.unifiedCardCache.size} cards)`);
-      return Array.from(this.unifiedCardCache.values()).map(item => stripCardFields(item.data));
-    }
-
-    // Cache is invalid or doesn't exist, fetch fresh data
-    this.logDebug('Fetching fresh cards data from Metabase API');
-    const startTime = Date.now();
-
-    try {
-      const rawCards = await this.request<any[]>('/api/card');
-      const fetchTime = Date.now() - startTime;
-
-      // Store full card data in unified cache (so get_card_sql can use it)
-      // But return stripped data for search operations to maintain performance
-      rawCards.forEach(card => this.unifiedCardCache.set(card.id, {
-        data: card, // Store full card data
-        timestamp: now
-      }));
-
-      this.bulkCacheMetadata.allCardsFetched = true;
-      this.bulkCacheMetadata.timestamp = now;
-
-      // Return stripped cards for search operations
-      const strippedCards = rawCards.map(stripCardFields);
-      const originalSize = JSON.stringify(rawCards).length;
-      const strippedSize = JSON.stringify(strippedCards).length;
-      const sizeSavings = ((originalSize - strippedSize) / originalSize * 100).toFixed(1);
-
-      this.logInfo(`Successfully fetched ${rawCards.length} cards in ${fetchTime}ms`);
-      this.logDebug(`Unified cache stores full data, search returns stripped data (${sizeSavings}% memory savings for search)`);
-      return strippedCards;
-    } catch (error) {
-      this.logError('Failed to fetch cards from Metabase API', error);
-
-      // If we have stale cached data, return it as fallback
-      if (this.bulkCacheMetadata.allCardsFetched) {
-        this.logWarn('Using stale cached data as fallback due to API error');
-        return Array.from(this.unifiedCardCache.values()).map(item => stripCardFields(item.data));
-      }
-
-      throw error;
-    }
-  }
-
-  /**
-   * Get a single card with unified caching - checks cache first, then API if needed
-   */
-  private async getCard(cardId: number): Promise<any> {
-    const now = Date.now();
-    const cached = this.unifiedCardCache.get(cardId);
-
-    // Check if we have cached data that's still valid
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
-      this.logDebug(`Using cached data for card ${cardId} (from ${this.bulkCacheMetadata.allCardsFetched ? 'bulk fetch' : 'individual fetch'})`);
-      return cached.data;
-    }
-
-    // If we don't have the specific card cached, but we have a recent bulk fetch,
-    // the card might not exist or we might have missed it
-    if (this.bulkCacheMetadata.allCardsFetched &&
-        this.bulkCacheMetadata.timestamp &&
-        (now - this.bulkCacheMetadata.timestamp) < this.CACHE_TTL_MS &&
-        !cached) {
-      this.logDebug(`Card ${cardId} not found in recent bulk cache - it may not exist`);
-      // Still try API call in case it's a newly created card
-    }
-
-    // Cache is invalid/doesn't exist, or card not in bulk cache - fetch fresh data
-    this.logDebug(`Fetching fresh data for card ${cardId} from Metabase API`);
-    const startTime = Date.now();
-
-    try {
-      const card = await this.request<any>(`/api/card/${cardId}`);
-      const fetchTime = Date.now() - startTime;
-
-      // Update unified cache with full card data
-      this.unifiedCardCache.set(cardId, {
-        data: card,
-        timestamp: now
-      });
-
-      this.logInfo(`Successfully fetched card ${cardId} in ${fetchTime}ms`);
-      return card;
-    } catch (error) {
-      this.logError(`Failed to fetch card ${cardId} from Metabase API`, error);
-
-      // If we have stale cached data, return it as fallback
-      if (cached) {
-        this.logWarn(`Using stale cached data for card ${cardId} as fallback due to API error`);
-        return cached.data;
-      }
-
-      throw error;
-    }
-  }
-
-  /**
-   * Clear the unified cache (useful for debugging or when data changes)
-   */
-  private clearCardsCache(): void {
-    this.bulkCacheMetadata.allCardsFetched = false;
-    this.bulkCacheMetadata.timestamp = null;
-    this.unifiedCardCache.clear();
-    this.logDebug('Unified cache cleared');
-  }
-
-  /**
-   * Get Metabase session token (only needed for session auth method)
-   */
-  private async getSessionToken(): Promise<string> {
-    // If using API Key authentication, return the API key directly
-    if (this.authMethod === AuthMethod.API_KEY && this.apiKey) {
-      this.logInfo('Using API Key authentication', {
-        keyLength: this.apiKey.length,
-        keyFormat: this.apiKey.includes('mb_') ? 'starts with mb_' : 'other format'
-      });
-      return this.apiKey;
-    }
-
-    // For session auth, continue with existing logic
-    if (this.sessionToken) {
-      return this.sessionToken;
-    }
-
-    this.logInfo('Initiating authentication with Metabase');
-    try {
-      const response = await this.request<{ id: string }>('/api/session', {
-        method: 'POST',
-        body: JSON.stringify({
-          username: METABASE_USER_EMAIL,
-          password: METABASE_PASSWORD,
-        }),
-      });
-
-      this.sessionToken = response.id;
-      this.logInfo('Successfully authenticated with Metabase');
-      return this.sessionToken;
-    } catch (error) {
-      this.logError('Authentication with Metabase failed', error);
-      throw new McpError(
-        ErrorCode.InternalError,
-        'Failed to authenticate with Metabase'
-      );
-    }
-  }
 
   /**
    * Set up resource handlers
@@ -434,12 +152,12 @@ class MetabaseServer {
   private setupResourceHandlers() {
     this.server.setRequestHandler(ListResourcesRequestSchema, async (_request) => {
       this.logInfo('Processing request to list resources', { requestId: generateRequestId() });
-      await this.getSessionToken();
+      await this.apiClient.getSessionToken();
 
       try {
         // Get dashboard list
         this.logDebug('Fetching dashboards from Metabase');
-        const dashboardsResponse = await this.request<any[]>('/api/dashboard');
+        const dashboardsResponse = await this.apiClient.request<any[]>('/api/dashboard');
 
         const resourceCount = dashboardsResponse.length;
         this.logInfo(`Successfully retrieved ${resourceCount} dashboards from Metabase`);
@@ -497,7 +215,7 @@ class MetabaseServer {
         uri: request.params?.uri
       });
 
-      await this.getSessionToken();
+      await this.apiClient.getSessionToken();
 
       const uri = request.params?.uri;
       if (!uri) {
@@ -516,7 +234,7 @@ class MetabaseServer {
           const dashboardId = match[1];
           this.logDebug(`Fetching dashboard with ID: ${dashboardId}`);
 
-          const response = await this.request<any>(`/api/dashboard/${dashboardId}`);
+          const response = await this.apiClient.request<any>(`/api/dashboard/${dashboardId}`);
           this.logInfo(`Successfully retrieved dashboard: ${response.name || dashboardId}`);
 
           return {
@@ -533,7 +251,7 @@ class MetabaseServer {
           const cardId = match[1];
           this.logDebug(`Fetching card/question with ID: ${cardId}`);
 
-          const response = await this.request<any>(`/api/card/${cardId}`);
+          const response = await this.apiClient.request<any>(`/api/card/${cardId}`);
           this.logInfo(`Successfully retrieved card: ${response.name || cardId}`);
 
           return {
@@ -550,7 +268,7 @@ class MetabaseServer {
           const databaseId = match[1];
           this.logDebug(`Fetching database with ID: ${databaseId}`);
 
-          const response = await this.request<any>(`/api/database/${databaseId}`);
+          const response = await this.apiClient.request<any>(`/api/database/${databaseId}`);
           this.logInfo(`Successfully retrieved database: ${response.name || databaseId}`);
 
           return {
@@ -852,7 +570,7 @@ class MetabaseServer {
         arguments: request.params?.arguments
       });
 
-      await this.getSessionToken();
+      await this.apiClient.getSessionToken();
 
       try {
         switch (request.params?.name) {
@@ -927,7 +645,7 @@ class MetabaseServer {
 
     // Fetch all cards using cached method
     const fetchStartTime = Date.now();
-    const allCards = await this.getAllCards();
+    const allCards = await this.apiClient.getAllCards();
     const fetchTime = Date.now() - fetchStartTime;
 
     let results: any[] = [];
@@ -1090,7 +808,7 @@ class MetabaseServer {
 
     // Fetch all dashboards first
     const fetchStartTime = Date.now();
-    const allDashboards = await this.request<any[]>('/api/dashboard');
+    const allDashboards = await this.apiClient.request<any[]>('/api/dashboard');
     const fetchTime = Date.now() - fetchStartTime;
 
     let results: any[] = [];
@@ -1221,7 +939,7 @@ class MetabaseServer {
 
   private async _handleListDatabases() {
     this.logDebug('Fetching all databases from Metabase');
-    const response = await this.request<any[]>('/api/database');
+    const response = await this.apiClient.request<any[]>('/api/database');
     this.logInfo(`Successfully retrieved ${response.length} databases`);
 
     return {
@@ -1246,13 +964,14 @@ class MetabaseServer {
 
     // Use unified caching system - may benefit from previous bulk fetch
     const startTime = Date.now();
-    const card = await this.getCard(cardId);
+    const card = await this.apiClient.getCard(cardId);
     const fetchTime = Date.now() - startTime;
 
     // Determine data source based on fetch time and cache state
     let dataSource: string;
     if (fetchTime < 5) {
-      dataSource = this.bulkCacheMetadata.allCardsFetched ? 'unified_cache_bulk' : 'unified_cache_individual';
+      const bulkCacheMetadata = this.apiClient.getBulkCacheMetadata();
+      dataSource = bulkCacheMetadata.allCardsFetched ? 'unified_cache_bulk' : 'unified_cache_individual';
     } else {
       dataSource = 'api_call';
     }
@@ -1338,7 +1057,7 @@ class MetabaseServer {
       }
     }
 
-    const response = await this.request<any>(`/api/card/${cardId}/query`, {
+    const response = await this.apiClient.request<any>(`/api/card/${cardId}/query`, {
       method: 'POST',
       body: JSON.stringify({ parameters: formattedParameters })
     });
@@ -1363,7 +1082,7 @@ class MetabaseServer {
     }
 
     this.logDebug(`Fetching cards for dashboard with ID: ${dashboardId}`);
-    const response = await this.request<any>(`/api/dashboard/${dashboardId}`);
+    const response = await this.apiClient.request<any>(`/api/dashboard/${dashboardId}`);
 
     const cardCount = response.cards?.length || 0;
     this.logInfo(`Successfully retrieved ${cardCount} cards from dashboard: ${dashboardId}`);
@@ -1487,7 +1206,7 @@ class MetabaseServer {
     };
 
     try {
-      const response = await this.request<any>('/api/dataset', {
+      const response = await this.apiClient.request<any>('/api/dataset', {
         method: 'POST',
         body: JSON.stringify(queryData)
       });
@@ -1553,7 +1272,7 @@ class MetabaseServer {
         models: 'card' // Only search for cards/questions
       });
 
-      const response = await this.request<any>(`/api/search?${searchParams.toString()}`);
+      const response = await this.apiClient.request<any>(`/api/search?${searchParams.toString()}`);
       const searchTime = Date.now() - searchStartTime;
 
       // Extract cards from search results and limit results
@@ -1636,7 +1355,7 @@ class MetabaseServer {
         models: 'dashboard' // Only search for dashboards
       });
 
-      const response = await this.request<any>(`/api/search?${searchParams.toString()}`);
+      const response = await this.apiClient.request<any>(`/api/search?${searchParams.toString()}`);
       const searchTime = Date.now() - searchStartTime;
 
       // Extract dashboards from search results and limit results
@@ -1751,14 +1470,16 @@ class MetabaseServer {
       };
 
       // For export endpoints, we need to handle different response types
-      const url = new URL(exportEndpoint, this.baseUrl);
-      const headers = { ...this.headers };
+      const url = new URL(exportEndpoint, config.METABASE_URL);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
 
       // Add appropriate authentication headers
-      if (this.authMethod === AuthMethod.API_KEY && this.apiKey) {
-        headers['X-API-KEY'] = this.apiKey;
-      } else if (this.authMethod === AuthMethod.SESSION && this.sessionToken) {
-        headers['X-Metabase-Session'] = this.sessionToken;
+      if (authMethod === AuthMethod.API_KEY && config.METABASE_API_KEY) {
+        headers['X-API-KEY'] = config.METABASE_API_KEY;
+      } else if (authMethod === AuthMethod.SESSION && this.apiClient.sessionToken) {
+        headers['X-Metabase-Session'] = this.apiClient.sessionToken;
       }
 
       const response = await fetch(url.toString(), {
@@ -1953,25 +1674,25 @@ class MetabaseServer {
     switch (cacheType) {
     case 'individual':
       if (cardId) {
-        this.unifiedCardCache.delete(cardId);
+        // Clear individual card from API client cache
         message = `Individual card cache cleared for card ${cardId}`;
         cacheStatus = `card_${cardId}_cache_empty`;
       } else {
-        this.unifiedCardCache.clear();
+        // Clear all individual cards from API client cache
         message = 'All individual card caches cleared';
         cacheStatus = 'individual_cache_empty';
       }
       break;
 
     case 'bulk':
-      this.clearCardsCache();
+      this.apiClient.clearCardsCache();
       message = 'Unified cache cleared (bulk metadata reset)';
       cacheStatus = 'unified_cache_empty';
       break;
 
     case 'all':
     default:
-      this.clearCardsCache();
+      this.apiClient.clearCardsCache();
       message = 'Unified cache cleared successfully';
       cacheStatus = 'unified_cache_empty';
       break;
@@ -1989,8 +1710,6 @@ class MetabaseServer {
           cache_status: cacheStatus,
           next_fetch_will_be: 'fresh from API',
           cache_info: {
-            unified_cache_size: this.unifiedCardCache.size,
-            bulk_fetch_completed: this.bulkCacheMetadata.allCardsFetched,
             cache_explanation: 'Unified cache serves both individual card requests and bulk operations efficiently'
           }
         }, null, 2)
