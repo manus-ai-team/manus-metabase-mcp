@@ -27,22 +27,40 @@ export interface MinimalCard {
  * Only keeps fields that are actually used in MCP operations
  */
 export function stripCardFields(card: any): MinimalCard {
-  return {
+  const result: MinimalCard = {
     id: card.id,
     name: card.name,
-    description: card.description || undefined,
     database_id: card.database_id,
-    dataset_query: card.dataset_query ? {
+  };
+
+  // Only add optional fields if they exist to reduce memory footprint
+  if (card.description) {
+    result.description = card.description;
+  }
+
+  if (card.dataset_query) {
+    result.dataset_query = {
       type: card.dataset_query.type,
       native: card.dataset_query.native ? {
         query: card.dataset_query.native.query,
         template_tags: card.dataset_query.native.template_tags
       } : undefined
-    } : undefined,
-    collection_id: card.collection_id,
-    created_at: card.created_at,
-    updated_at: card.updated_at
-  };
+    };
+  }
+
+  if (card.collection_id !== null && card.collection_id !== undefined) {
+    result.collection_id = card.collection_id;
+  }
+
+  if (card.created_at) {
+    result.created_at = card.created_at;
+  }
+
+  if (card.updated_at) {
+    result.updated_at = card.updated_at;
+  }
+
+  return result;
 }
 
 /**
@@ -310,6 +328,34 @@ export function toBooleanSafe(value: unknown): boolean {
     return value !== 0;
   }
   return Boolean(value);
+}
+
+/**
+ * Validate that a value is a positive integer
+ */
+export function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * Validate that a string is not empty after trimming
+ */
+export function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Safely parse a number with fallback
+ */
+export function parseNumberSafe(value: unknown, fallback: number = 0): number {
+  if (typeof value === 'number' && !isNaN(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? fallback : parsed;
+  }
+  return fallback;
 }
 
 /**
