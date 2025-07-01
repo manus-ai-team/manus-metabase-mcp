@@ -626,7 +626,49 @@ class MetabaseServer {
           },
           {
             name: 'search_cards',
-            description: 'Search for questions/cards by name, description, ID, or query content with intelligent hybrid matching',
+            description: '[FAST] Search for questions/cards using Metabase native search API. Searches name, description, and other metadata. For advanced fuzzy matching or SQL content search, use advanced_search_cards.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Search query - searches across card names, descriptions, and metadata'
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
+                }
+              },
+              required: ['query']
+            }
+          },
+          {
+            name: 'search_dashboards',
+            description: '[FAST] Search for dashboards using Metabase native search API. Searches name, description, and other metadata. For advanced fuzzy matching, use advanced_search_dashboards.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Search query - searches across dashboard names, descriptions, and metadata'
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
+                }
+              },
+              required: ['query']
+            }
+          },
+          {
+            name: 'advanced_search_cards',
+            description: '[ADVANCED] Search for questions/cards by name, description, ID, or query content with intelligent hybrid matching (exact + substring + fuzzy). Slower but more comprehensive than search_cards.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -659,8 +701,8 @@ class MetabaseServer {
             }
           },
           {
-            name: 'search_dashboards',
-            description: 'Search for dashboards by name, description, or ID with intelligent hybrid matching',
+            name: 'advanced_search_dashboards',
+            description: '[ADVANCED] Search for dashboards by name, description, or ID with intelligent hybrid matching (exact + substring + fuzzy). Slower but more comprehensive than search_dashboards.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -778,9 +820,13 @@ class MetabaseServer {
         case 'execute_query':
           return this._handleExecuteQuery(request, requestId);
         case 'search_cards':
-          return this._handleSearchCards(request, requestId);
+          return this._handleFastSearchCards(request, requestId);
         case 'search_dashboards':
-          return this._handleSearchDashboards(request, requestId);
+          return this._handleFastSearchDashboards(request, requestId);
+        case 'advanced_search_cards':
+          return this._handleAdvancedSearchCards(request, requestId);
+        case 'advanced_search_dashboards':
+          return this._handleAdvancedSearchDashboards(request, requestId);
         case 'export_query':
           return this._handleExportQuery(request, requestId);
         case 'clear_cache':
@@ -1052,7 +1098,159 @@ class MetabaseServer {
     };
   }
 
-  private async _handleSearchCards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
+  private async _handleFastSearchCards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
+    const searchQuery = request.params?.arguments?.query as string;
+    const maxResults = (request.params?.arguments?.max_results as number) || 50;
+
+    if (!searchQuery) {
+      this.logWarn('Missing query parameter in fast search_cards request', { requestId });
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'Search query parameter is required'
+      );
+    }
+
+    this.logDebug(`Fast searching for cards with query: "${searchQuery}"`);
+
+    const searchStartTime = Date.now();
+
+    try {
+      // Use Metabase's native search API
+      const searchParams = new URLSearchParams({
+        q: searchQuery,
+        models: 'card' // Only search for cards/questions
+      });
+
+      const response = await this.request<any>(`/api/search?${searchParams.toString()}`);
+      const searchTime = Date.now() - searchStartTime;
+
+      // Extract cards from search results and limit results
+      let cards = response.data || response || [];
+      if (Array.isArray(cards)) {
+        cards = cards.filter((item: any) => item.model === 'card').slice(0, maxResults);
+      } else {
+        cards = [];
+      }
+
+      // Enhance results with additional metadata
+      const enhancedResults = cards.map((card: any) => ({
+        id: card.id,
+        name: card.name,
+        description: card.description,
+        collection_name: card.collection_name,
+        database_id: card.database_id,
+        created_at: card.created_at,
+        updated_at: card.updated_at,
+        model: card.model,
+        search_context: card.context || null,
+        recommended_action: `Use get_card_sql(${card.id}) then execute_query() for reliable execution`
+      }));
+
+      this.logInfo(`Fast search found ${enhancedResults.length} cards in ${searchTime}ms`);
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            search_query: searchQuery,
+            search_method: 'native_metabase_api',
+            total_results: enhancedResults.length,
+            performance_info: {
+              search_time_ms: searchTime,
+              api_endpoint: '/api/search',
+              search_method: 'server_side_native'
+            },
+            recommended_workflow: 'For cards: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
+            note: 'This uses Metabase native search API for fast results. For advanced fuzzy matching or SQL content search, use advanced_search_cards.',
+            results: enhancedResults
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      this.logError('Fast search failed, this may indicate the search API is not available', error);
+      throw new McpError(
+        ErrorCode.InternalError,
+        'Fast search failed. The search API may not be available in this Metabase version.'
+      );
+    }
+  }
+
+  private async _handleFastSearchDashboards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
+    const searchQuery = request.params?.arguments?.query as string;
+    const maxResults = (request.params?.arguments?.max_results as number) || 50;
+
+    if (!searchQuery) {
+      this.logWarn('Missing query parameter in fast search_dashboards request', { requestId });
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'Search query parameter is required'
+      );
+    }
+
+    this.logDebug(`Fast searching for dashboards with query: "${searchQuery}"`);
+
+    const searchStartTime = Date.now();
+
+    try {
+      // Use Metabase's native search API
+      const searchParams = new URLSearchParams({
+        q: searchQuery,
+        models: 'dashboard' // Only search for dashboards
+      });
+
+      const response = await this.request<any>(`/api/search?${searchParams.toString()}`);
+      const searchTime = Date.now() - searchStartTime;
+
+      // Extract dashboards from search results and limit results
+      let dashboards = response.data || response || [];
+      if (Array.isArray(dashboards)) {
+        dashboards = dashboards.filter((item: any) => item.model === 'dashboard').slice(0, maxResults);
+      } else {
+        dashboards = [];
+      }
+
+      // Enhance results with additional metadata
+      const enhancedResults = dashboards.map((dashboard: any) => ({
+        id: dashboard.id,
+        name: dashboard.name,
+        description: dashboard.description,
+        collection_name: dashboard.collection_name,
+        created_at: dashboard.created_at,
+        updated_at: dashboard.updated_at,
+        model: dashboard.model,
+        search_context: dashboard.context || null,
+        recommended_action: `Use get_dashboard_cards(${dashboard.id}) to get dashboard details`
+      }));
+
+      this.logInfo(`Fast search found ${enhancedResults.length} dashboards in ${searchTime}ms`);
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            search_query: searchQuery,
+            search_method: 'native_metabase_api',
+            total_results: enhancedResults.length,
+            performance_info: {
+              search_time_ms: searchTime,
+              api_endpoint: '/api/search',
+              search_method: 'server_side_native'
+            },
+            note: 'This uses Metabase native search API for fast results. For advanced fuzzy matching, use advanced_search_dashboards.',
+            results: enhancedResults
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      this.logError('Fast dashboard search failed, this may indicate the search API is not available', error);
+      throw new McpError(
+        ErrorCode.InternalError,
+        'Fast search failed. The search API may not be available in this Metabase version.'
+      );
+    }
+  }
+
+  private async _handleAdvancedSearchCards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
     const searchQuery = request.params?.arguments?.query as string;
     const searchType = (request.params?.arguments?.search_type as string) || 'auto';
     const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
@@ -1194,7 +1392,7 @@ class MetabaseServer {
     };
   }
 
-  private async _handleSearchDashboards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
+  private async _handleAdvancedSearchDashboards(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
     const searchQuery = request.params?.arguments?.query as string;
     const searchType = (request.params?.arguments?.search_type as string) || 'auto';
     const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
