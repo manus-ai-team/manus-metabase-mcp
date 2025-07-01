@@ -593,14 +593,56 @@ class MetabaseServer {
       return {
         tools: [
           {
-            name: 'get_cards',
-            description: 'Get all questions/cards in Metabase with optional search. When no query is provided, returns all cards. When query is provided, performs intelligent hybrid search (exact + substring + fuzzy matching).',
+            name: 'search_cards',
+            description: '[RECOMMENDED] Fast search for questions/cards using Metabase native search API. Use this FIRST when looking for specific cards by name, description, or metadata. Much faster than get_cards for targeted searches.',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Optional search query - can be card name/description, exact ID, or SQL content to search for. If omitted, returns all cards.'
+                  description: 'Search query - searches across card names, descriptions, and metadata'
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
+                }
+              },
+              required: ['query']
+            }
+          },
+          {
+            name: 'search_dashboards',
+            description: '[RECOMMENDED] Fast search for dashboards using Metabase native search API. Use this FIRST when looking for specific dashboards by name, description, or metadata. Much faster than get_dashboards for targeted searches.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Search query - searches across dashboard names, descriptions, and metadata'
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
+                }
+              },
+              required: ['query']
+            }
+          },
+          {
+            name: 'get_cards',
+            description: '[SLOW] Get all questions/cards in Metabase with optional advanced search. WARNING: This fetches ALL cards from the server and can be very slow on large Metabase instances. Use search_cards instead for finding specific cards. Only use this when you need comprehensive data analysis, advanced fuzzy matching, or SQL content search.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Optional search query - can be card name/description, exact ID, or SQL content to search for. If omitted, returns all cards. WARNING: Fetching all cards can be very slow.'
                 },
                 search_type: {
                   type: 'string',
@@ -628,13 +670,13 @@ class MetabaseServer {
           },
           {
             name: 'get_dashboards',
-            description: 'Get all dashboards in Metabase with optional search. When no query is provided, returns all dashboards. When query is provided, performs intelligent hybrid search (exact + substring + fuzzy matching).',
+            description: '[SLOW] Get all dashboards in Metabase with optional advanced search. WARNING: This fetches ALL dashboards from the server and can be slow on large Metabase instances. Use search_dashboards instead for finding specific dashboards. Only use this when you need comprehensive data analysis or advanced fuzzy matching.',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Optional search query - can be dashboard name/description or exact ID. If omitted, returns all dashboards.'
+                  description: 'Optional search query - can be dashboard name/description or exact ID. If omitted, returns all dashboards. WARNING: Fetching all dashboards can be slow.'
                 },
                 search_type: {
                   type: 'string',
@@ -662,7 +704,7 @@ class MetabaseServer {
           },
           {
             name: 'list_databases',
-            description: 'List all databases in Metabase',
+            description: '[FAST] List all databases in Metabase',
             inputSchema: {
               type: 'object',
               properties: {}
@@ -670,7 +712,7 @@ class MetabaseServer {
           },
           {
             name: 'execute_card',
-            description: '[DEPRECATED - Use execute_query instead] Execute a Metabase question/card directly. This method is unreliable and may timeout. Prefer using get_card_sql + execute_query for better control.',
+            description: '[DEPRECATED] Execute a Metabase question/card directly. This method is unreliable and may timeout. Prefer using get_card_sql + execute_query for better control.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -688,7 +730,7 @@ class MetabaseServer {
           },
           {
             name: 'get_dashboard_cards',
-            description: 'Get all cards in a dashboard',
+            description: '[FAST] Get all cards in a dashboard',
             inputSchema: {
               type: 'object',
               properties: {
@@ -740,50 +782,8 @@ class MetabaseServer {
             }
           },
           {
-            name: 'search_cards',
-            description: '[FAST] Search for questions/cards using Metabase native search API. Searches name, description, and other metadata. For advanced fuzzy matching or SQL content search, use get_cards with search parameters.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query - searches across card names, descriptions, and metadata'
-                },
-                max_results: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 50)',
-                  minimum: 1,
-                  maximum: 200,
-                  default: 50
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
-            name: 'search_dashboards',
-            description: '[FAST] Search for dashboards using Metabase native search API. Searches name, description, and other metadata. For advanced fuzzy matching, use get_dashboards with search parameters.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query - searches across dashboard names, descriptions, and metadata'
-                },
-                max_results: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 50)',
-                  minimum: 1,
-                  maximum: 200,
-                  default: 50
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
             name: 'export_query',
-            description: 'Export large SQL query results using Metabase export endpoints (supports up to 1M rows vs 2K limit of execute_query). Returns data in specified format (CSV, JSON, or XLSX).',
+            description: '[ADVANCED] Export large SQL query results using Metabase export endpoints (supports up to 1M rows vs 2K limit of execute_query). Returns data in specified format (CSV, JSON, or XLSX).',
             inputSchema: {
               type: 'object',
               properties: {
@@ -823,7 +823,7 @@ class MetabaseServer {
           },
           {
             name: 'clear_cache',
-            description: 'Clear the internal cache for cards data. Useful for debugging or when you know the data has changed.',
+            description: '[UTILITY] Clear the internal cache for cards data. Useful for debugging or when you know the data has changed.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -858,6 +858,10 @@ class MetabaseServer {
 
       try {
         switch (request.params?.name) {
+        case 'search_cards':
+          return this._handleFastSearchCards(request, requestId);
+        case 'search_dashboards':
+          return this._handleFastSearchDashboards(request, requestId);
         case 'get_cards':
           return this._handleGetCards(request, requestId);
         case 'get_dashboards':
@@ -872,11 +876,6 @@ class MetabaseServer {
           return this._handleGetDashboardCards(request, requestId);
         case 'execute_query':
           return this._handleExecuteQuery(request, requestId);
-        case 'search_cards':
-          return this._handleFastSearchCards(request, requestId);
-        case 'search_dashboards':
-          return this._handleFastSearchDashboards(request, requestId);
-
         case 'export_query':
           return this._handleExportQuery(request, requestId);
         case 'clear_cache':
@@ -914,6 +913,13 @@ class MetabaseServer {
     const searchType = (request.params?.arguments?.search_type as string) || 'auto';
     const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
     const maxResults = (request.params?.arguments?.max_results as number) || 50;
+
+    // Log performance warning
+    if (!searchQuery) {
+      this.logWarn('get_cards called without search query - this will fetch ALL cards and can be very slow. Consider using search_cards for targeted searches.', { requestId });
+    } else {
+      this.logWarn(`get_cards called with search query "${searchQuery}" - consider using search_cards for faster results unless you need advanced fuzzy matching or SQL content search.`, { requestId });
+    }
 
     if (!searchQuery) {
       this.logDebug('Fetching all cards from Metabase', { requestId });
@@ -1033,12 +1039,16 @@ class MetabaseServer {
           search_type: effectiveSearchType,
           fuzzy_threshold: effectiveSearchType === 'fuzzy' ? fuzzyThreshold : undefined,
           total_results: results.length,
+          performance_warning: searchQuery ?
+            'PERFORMANCE TIP: For simple name/description searches, use search_cards instead of get_cards for much faster results.' :
+            'PERFORMANCE WARNING: You fetched ALL cards from the server. Use search_cards for targeted searches to improve performance.',
           performance_info: {
             fetch_time_ms: fetchTime,
             search_time_ms: searchTime,
             total_cards_searched: allCards.length,
             cache_used: fetchTime < 1000, // Assume cache was used if fetch was very fast
-            search_method_used: effectiveSearchType
+            search_method_used: effectiveSearchType,
+            alternative_recommendation: 'Use search_cards for faster targeted searches'
           },
           recommended_workflow: 'For cards with SQL: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
           search_info: effectiveSearchType === 'all' ? {
@@ -1066,6 +1076,13 @@ class MetabaseServer {
     const searchType = (request.params?.arguments?.search_type as string) || 'auto';
     const fuzzyThreshold = (request.params?.arguments?.fuzzy_threshold as number) || 0.4;
     const maxResults = (request.params?.arguments?.max_results as number) || 50;
+
+    // Log performance warning
+    if (!searchQuery) {
+      this.logWarn('get_dashboards called without search query - this will fetch ALL dashboards and can be slow. Consider using search_dashboards for targeted searches.', { requestId });
+    } else {
+      this.logWarn(`get_dashboards called with search query "${searchQuery}" - consider using search_dashboards for faster results unless you need advanced fuzzy matching.`, { requestId });
+    }
 
     if (!searchQuery) {
       this.logDebug('Fetching all dashboards from Metabase', { requestId });
@@ -1174,11 +1191,15 @@ class MetabaseServer {
           search_type: effectiveSearchType,
           fuzzy_threshold: effectiveSearchType === 'fuzzy' ? fuzzyThreshold : undefined,
           total_results: results.length,
+          performance_warning: searchQuery ?
+            'PERFORMANCE TIP: For simple name/description searches, use search_dashboards instead of get_dashboards for much faster results.' :
+            'PERFORMANCE WARNING: You fetched ALL dashboards from the server. Use search_dashboards for targeted searches to improve performance.',
           performance_info: {
             fetch_time_ms: fetchTime,
             search_time_ms: searchTime,
             total_dashboards_searched: allDashboards.length,
-            search_method_used: effectiveSearchType
+            search_method_used: effectiveSearchType,
+            alternative_recommendation: 'Use search_dashboards for faster targeted searches'
           },
           search_info: effectiveSearchType === 'all' ? {
             explanation: 'Retrieved all available dashboards (no search query provided). Results limited by max_results parameter.',
@@ -1462,12 +1483,18 @@ class MetabaseServer {
             search_query: searchQuery,
             search_method: 'native_metabase_api',
             total_results: enhancedResults.length,
+            performance_advantage: `FAST SEARCH: Completed in ${searchTime}ms using server-side native search API. Much faster than get_cards which fetches all data.`,
             performance_info: {
               search_time_ms: searchTime,
               api_endpoint: '/api/search',
-              search_method: 'server_side_native'
+              search_method: 'server_side_native',
+              performance_note: 'This method is optimized for speed and should be preferred over get_cards for targeted searches'
             },
             recommended_workflow: 'For cards: 1) Use get_card_sql() to get the SQL, 2) Modify if needed, 3) Use execute_query()',
+            when_to_use: {
+              use_search_cards: 'For finding specific cards by name, description, or metadata (RECOMMENDED)',
+              use_get_cards: 'Only when you need advanced fuzzy matching, SQL content search, or comprehensive data analysis'
+            },
             note: 'This uses Metabase native search API for fast results. For advanced fuzzy matching or SQL content search, use get_cards with search parameters.',
             results: enhancedResults
           }, null, 2)
@@ -1538,10 +1565,16 @@ class MetabaseServer {
             search_query: searchQuery,
             search_method: 'native_metabase_api',
             total_results: enhancedResults.length,
+            performance_advantage: `FAST SEARCH: Completed in ${searchTime}ms using server-side native search API. Much faster than get_dashboards which fetches all data.`,
             performance_info: {
               search_time_ms: searchTime,
               api_endpoint: '/api/search',
-              search_method: 'server_side_native'
+              search_method: 'server_side_native',
+              performance_note: 'This method is optimized for speed and should be preferred over get_dashboards for targeted searches'
+            },
+            when_to_use: {
+              use_search_dashboards: 'For finding specific dashboards by name, description, or metadata (RECOMMENDED)',
+              use_get_dashboards: 'Only when you need advanced fuzzy matching or comprehensive data analysis'
             },
             note: 'This uses Metabase native search API for fast results. For advanced fuzzy matching, use get_dashboards with search parameters.',
             results: enhancedResults
@@ -1556,8 +1589,6 @@ class MetabaseServer {
       );
     }
   }
-
-
 
   private async _handleExportQuery(request: z.infer<typeof CallToolRequestSchema>, requestId: string) {
     const databaseId = request.params?.arguments?.database_id as number;
