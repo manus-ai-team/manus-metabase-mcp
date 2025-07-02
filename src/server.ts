@@ -519,14 +519,14 @@ export class MetabaseServer {
           },
           {
             name: 'clear_cache',
-            description: '[UTILITY] Clear the internal cache for cards data. Useful for debugging or when you know the data has changed.',
+            description: '[UTILITY] Clear the internal cache for cards and dashboards data. Useful for debugging or when you know the data has changed.',
             inputSchema: {
               type: 'object',
               properties: {
                 cache_type: {
                   type: 'string',
-                  enum: ['all', 'individual', 'bulk'],
-                  description: 'Type of cache to clear: "all" (default), "individual" (single card cache), or "bulk" (unified cache metadata)',
+                  enum: ['all', 'cards', 'dashboards', 'individual', 'bulk'],
+                  description: 'Type of cache to clear: "all" (default - clears both cards and dashboards), "cards" (cards only), "dashboards" (dashboards only), "individual" (single card cache), or "bulk" (cards cache metadata)',
                   default: 'all'
                 },
                 card_id: {

@@ -26,17 +26,29 @@ export function handleClearCache(
     }
     break;
 
+  case 'cards':
+    apiClient.clearCardsCache();
+    message = 'Cards cache cleared successfully';
+    cacheStatus = 'cards_cache_empty';
+    break;
+
+  case 'dashboards':
+    apiClient.clearDashboardsCache();
+    message = 'Dashboards cache cleared successfully';
+    cacheStatus = 'dashboards_cache_empty';
+    break;
+
   case 'bulk':
     apiClient.clearCardsCache();
-    message = 'Unified cache cleared (bulk metadata reset)';
-    cacheStatus = 'unified_cache_empty';
+    message = 'Cards cache cleared (bulk metadata reset)';
+    cacheStatus = 'cards_cache_empty';
     break;
 
   case 'all':
   default:
-    apiClient.clearCardsCache();
-    message = 'Unified cache cleared successfully';
-    cacheStatus = 'unified_cache_empty';
+    apiClient.clearAllCache();
+    message = 'All caches cleared successfully (cards and dashboards)';
+    cacheStatus = 'all_caches_empty';
     break;
   }
 

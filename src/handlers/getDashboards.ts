@@ -29,9 +29,9 @@ export async function handleGetDashboards(
     logDebug(`Searching for dashboards with query: "${searchQuery}" (type: ${searchType}, fuzzy_threshold: ${fuzzyThreshold})`, { requestId });
   }
 
-  // Fetch all dashboards first
+  // Fetch all dashboards using caching mechanism
   const fetchStartTime = Date.now();
-  const allDashboards = await apiClient.request<any[]>('/api/dashboard');
+  const allDashboards = await apiClient.getAllDashboards();
   const fetchTime = Date.now() - fetchStartTime;
 
   let results: any[] = [];
