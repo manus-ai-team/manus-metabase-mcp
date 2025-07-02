@@ -3,12 +3,12 @@ import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../api.js';
 
 export function handleClearCache(
-  request: z.infer<typeof CallToolRequestSchema> | undefined,
+  request: z.infer<typeof CallToolRequestSchema>,
   apiClient: MetabaseApiClient,
   logInfo: (message: string, data?: unknown) => void
 ) {
-  const cacheType = (request?.params?.arguments?.cache_type as string) || 'all';
-  const cardId = request?.params?.arguments?.card_id as number;
+  const cacheType = (request.params?.arguments?.cache_type as string) || 'all';
+  const cardId = request.params?.arguments?.card_id as number;
 
   let message = '';
   let cacheStatus = '';
