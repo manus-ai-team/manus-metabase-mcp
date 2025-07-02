@@ -2,6 +2,7 @@
  * Configuration management with environment variable validation
  */
 
+import 'dotenv/config';
 import { z } from 'zod';
 
 // Environment variable schema
