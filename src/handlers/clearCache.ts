@@ -17,10 +17,12 @@ export function handleClearCache(
   case 'individual':
     if (cardId) {
       // Clear individual card from API client cache
+      apiClient.clearIndividualCardCache(cardId);
       message = `Individual card cache cleared for card ${cardId}`;
       cacheStatus = `card_${cardId}_cache_empty`;
     } else {
       // Clear all individual cards from API client cache
+      apiClient.clearAllIndividualCardsCache();
       message = 'All individual card caches cleared';
       cacheStatus = 'individual_cache_empty';
     }

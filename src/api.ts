@@ -398,6 +398,29 @@ export class MetabaseApiClient {
   }
 
   /**
+   * Clear an individual card from the cache
+   */
+  clearIndividualCardCache(cardId: number): void {
+    const existed = this.unifiedCardCache.delete(cardId);
+    if (existed) {
+      this.logDebug(`Individual card cache cleared for card ${cardId}`);
+    } else {
+      this.logDebug(`Card ${cardId} was not in cache`);
+    }
+  }
+
+  /**
+   * Clear all individual cards from cache (but preserve bulk cache metadata)
+   */
+  clearAllIndividualCardsCache(): void {
+    const cacheSize = this.unifiedCardCache.size;
+    this.unifiedCardCache.clear();
+    // Note: We're not resetting bulkCacheMetadata here since this is specifically
+    // for clearing individual cards, not the bulk cache state
+    this.logDebug(`All individual card caches cleared (${cacheSize} cards removed)`);
+  }
+
+  /**
    * Get bulk cache metadata for determining data source
    */
   getBulkCacheMetadata(): { allCardsFetched: boolean; timestamp: number | null } {
