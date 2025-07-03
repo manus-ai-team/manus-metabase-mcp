@@ -49,9 +49,11 @@ export async function handleExecuteQuery(
   // Handle LIMIT clause: only override if our limit is more restrictive than existing limit
   let limitedQuery = query.trim();
   let finalLimit = rowLimit;
+  let shouldAddLimit = false;
 
-  // Check for existing LIMIT clause
-  const limitRegex = /\bLIMIT\s+(\d+)\s*;?\s*$/i;
+  // Look for existing LIMIT clause at the end of the query (most common case)
+  // This regex properly handles LIMIT with optional OFFSET and accounts for trailing semicolons/whitespace
+  const limitRegex = /\bLIMIT\s+(\d+)(?:\s+OFFSET\s+\d+)?\s*;?\s*$/i;
   const limitMatch = limitedQuery.match(limitRegex);
 
   if (limitMatch) {
@@ -59,51 +61,24 @@ export async function handleExecuteQuery(
     logDebug(`Found existing LIMIT clause: ${existingLimit}, requested limit: ${rowLimit}`);
 
     if (existingLimit <= rowLimit) {
-      // Existing limit is more restrictive, keep it
-      logDebug(`Keeping existing LIMIT ${existingLimit} as it's more restrictive than requested ${rowLimit}`);
+      // Existing limit is more restrictive or equal, keep it
+      logDebug(`Keeping existing LIMIT ${existingLimit} as it's more restrictive than or equal to requested ${rowLimit}`);
       finalLimit = existingLimit;
       // Don't modify the query
     } else {
-      // Our limit is more restrictive, replace the existing one
+      // Our limit is more restrictive, replace the existing LIMIT clause
       logDebug(`Replacing existing LIMIT ${existingLimit} with more restrictive limit ${rowLimit}`);
-      limitedQuery = limitedQuery.replace(limitRegex, '');
-      // We'll add our limit below
+      limitedQuery = limitedQuery.replace(limitRegex, '').trim();
+      shouldAddLimit = true;
     }
   } else {
-    // Check for LIMIT in middle of query (less common but possible)
-    const midLimitRegex = /\bLIMIT\s+(\d+)/gi;
-    const midLimitMatches = [...limitedQuery.matchAll(midLimitRegex)];
-
-    if (midLimitMatches.length > 0) {
-      // Find the most restrictive existing limit
-      const existingLimits = midLimitMatches.map(match => parseInt(match[1], 10));
-      const minExistingLimit = Math.min(...existingLimits);
-
-      logDebug(`Found LIMIT clause(s) in query: ${existingLimits.join(', ')}, min: ${minExistingLimit}`);
-
-      if (minExistingLimit <= rowLimit) {
-        // Existing limit is more restrictive, keep the query as is
-        logDebug(`Keeping existing LIMIT clauses as minimum ${minExistingLimit} is more restrictive than requested ${rowLimit}`);
-        finalLimit = minExistingLimit;
-        // Don't modify the query
-      } else {
-        // Our limit is more restrictive, remove all existing LIMIT clauses
-        logDebug(`Removing existing LIMIT clauses and applying more restrictive limit ${rowLimit}`);
-        limitedQuery = limitedQuery.replace(midLimitRegex, '');
-        // We'll add our limit below
-      }
-    }
+    // No LIMIT clause found at the end, add ours
+    logDebug(`No existing LIMIT clause found, adding limit ${rowLimit}`);
+    shouldAddLimit = true;
   }
 
-  // Add our LIMIT clause only if we determined we need to override
-  if (finalLimit === rowLimit && (limitMatch || limitedQuery !== query.trim())) {
-    if (limitedQuery.endsWith(';')) {
-      limitedQuery = limitedQuery.slice(0, -1) + ` LIMIT ${rowLimit};`;
-    } else {
-      limitedQuery = limitedQuery + ` LIMIT ${rowLimit}`;
-    }
-  } else if (finalLimit === rowLimit && !limitMatch) {
-    // No existing limit found, add ours
+  // Add LIMIT clause if needed
+  if (shouldAddLimit) {
     if (limitedQuery.endsWith(';')) {
       limitedQuery = limitedQuery.slice(0, -1) + ` LIMIT ${rowLimit};`;
     } else {
