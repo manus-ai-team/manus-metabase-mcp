@@ -22,13 +22,8 @@ import { MetabaseApiClient } from './api.js';
 import {
   handleListDatabases,
   handleGetCardSql,
-  handleExecuteCard,
   handleGetDashboardCards,
   handleExecuteQuery,
-  handleGetCards,
-  handleGetDashboards,
-  handleFastSearchCards,
-  handleFastSearchDashboards,
   handleUnifiedSearch,
   handleExportQuery,
   handleClearCache
@@ -291,7 +286,7 @@ export class MetabaseServer {
         tools: [
           {
             name: 'search',
-            description: '[RECOMMENDED] Unified search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, and more. Use this FIRST for finding any Metabase content. Much faster than get_cards/get_dashboards as it uses server-side search.',
+            description: '[RECOMMENDED] Unified search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, and more. Use this FIRST for finding any Metabase content. Uses server-side search for optimal performance.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -347,116 +342,8 @@ export class MetabaseServer {
               required: []
             }
           },
-          {
-            name: 'search_cards',
-            description: '[DEPRECATED] Use unified search tool instead. Fast search for questions/cards using Metabase native search API.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query - searches across card names, descriptions, and metadata'
-                },
-                max_results: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 50)',
-                  minimum: 1,
-                  maximum: 200,
-                  default: 50
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
-            name: 'search_dashboards',
-            description: '[DEPRECATED] Use unified search tool instead. Fast search for dashboards using Metabase native search API.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query - searches across dashboard names, descriptions, and metadata'
-                },
-                max_results: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 50)',
-                  minimum: 1,
-                  maximum: 200,
-                  default: 50
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
-            name: 'get_cards',
-            description: '[LEGACY] Get all questions/cards in Metabase with optional advanced search. WARNING: This fetches ALL cards from the server and can be very slow on large Metabase instances. Use unified search tool instead for finding specific cards. Only use this when you need comprehensive data analysis or advanced fuzzy matching.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Optional search query - can be card name/description, exact ID, or SQL content to search for. If omitted, returns all cards. WARNING: Fetching all cards can be very slow.'
-                },
-                search_type: {
-                  type: 'string',
-                  enum: ['auto', 'id', 'exact'],
-                  description: "Type of search when query is provided: 'auto' for intelligent hybrid search (exact + substring + fuzzy), 'id' for exact ID match, 'exact' for exact phrase matching only",
-                  default: 'auto'
-                },
-                fuzzy_threshold: {
-                  type: 'number',
-                  description: 'Minimum similarity score for fuzzy matching in auto mode (0.0-1.0, default: 0.4). Higher values = stricter matching.',
-                  minimum: 0.0,
-                  maximum: 1.0,
-                  default: 0.4
-                },
-                max_results: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 50)',
-                  minimum: 1,
-                  maximum: 200,
-                  default: 50
-                }
-              },
-              required: []
-            }
-          },
-          {
-            name: 'get_dashboards',
-            description: '[LEGACY] Get all dashboards in Metabase with optional advanced search. WARNING: This fetches ALL dashboards from the server and can be slow on large Metabase instances. Use unified search tool instead for finding specific dashboards. Only use this when you need comprehensive data analysis or advanced fuzzy matching.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Optional search query - can be dashboard name/description or exact ID. If omitted, returns all dashboards. WARNING: Fetching all dashboards can be slow.'
-                },
-                search_type: {
-                  type: 'string',
-                  enum: ['auto', 'id', 'exact'],
-                  description: "Type of search when query is provided: 'auto' for intelligent hybrid search (exact + substring + fuzzy), 'id' for exact ID match, 'exact' for exact phrase matching only",
-                  default: 'auto'
-                },
-                fuzzy_threshold: {
-                  type: 'number',
-                  description: 'Minimum similarity score for fuzzy matching in auto mode (0.0-1.0, default: 0.4). Higher values = stricter matching.',
-                  minimum: 0.0,
-                  maximum: 1.0,
-                  default: 0.4
-                },
-                max_results: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 50)',
-                  minimum: 1,
-                  maximum: 200,
-                  default: 50
-                }
-              },
-              required: []
-            }
-          },
+
+
           {
             name: 'list_databases',
             description: '[FAST] List all databases in Metabase',
@@ -465,24 +352,7 @@ export class MetabaseServer {
               properties: {}
             }
           },
-          {
-            name: 'execute_card',
-            description: '[DEPRECATED] Execute a Metabase question/card directly. This method is unreliable and may timeout. Prefer using get_card_sql + execute_query for better control.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                card_id: {
-                  type: 'number',
-                  description: 'ID of the card/question to execute'
-                },
-                parameters: {
-                  type: 'object',
-                  description: 'Optional parameters for the query'
-                }
-              },
-              required: ['card_id']
-            }
-          },
+
           {
             name: 'get_dashboard_cards',
             description: '[FAST] Get all cards in a dashboard',
@@ -499,7 +369,7 @@ export class MetabaseServer {
           },
           {
             name: 'execute_query',
-            description: '[RECOMMENDED] Execute a SQL query against a Metabase database. This is the preferred method for running queries as it provides better control and reliability than execute_card. Results are limited to improve performance for AI agents - use export_query for larger datasets.',
+            description: '[RECOMMENDED] Execute a SQL query against a Metabase database. This is the preferred method for running queries as it provides better control and reliability. Results are limited to improve performance for AI agents - use export_query for larger datasets.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -529,7 +399,7 @@ export class MetabaseServer {
           },
           {
             name: 'get_card_sql',
-            description: '[RECOMMENDED] Get the SQL query and database details from a Metabase card/question. Uses optimized unified caching for maximum efficiency - benefits from previous get_cards calls and caches individual requests. Use this before execute_query to get the SQL you can modify.',
+            description: '[RECOMMENDED] Get the SQL query and database details from a Metabase card/question. Uses optimized unified caching for maximum efficiency. Use this before execute_query to get the SQL you can modify.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -615,22 +485,12 @@ export class MetabaseServer {
         switch (request.params?.name) {
         case 'search':
           return handleUnifiedSearch(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
-        case 'search_cards':
-          this.logWarn('search_cards is deprecated - use unified search tool instead', { requestId });
-          return handleFastSearchCards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
-        case 'search_dashboards':
-          this.logWarn('search_dashboards is deprecated - use unified search tool instead', { requestId });
-          return handleFastSearchDashboards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
-        case 'get_cards':
-          return handleGetCards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this));
-        case 'get_dashboards':
-          return handleGetDashboards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this));
+
         case 'list_databases':
           return handleListDatabases(this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this));
         case 'get_card_sql':
           return handleGetCardSql(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this));
-        case 'execute_card':
-          return handleExecuteCard(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this));
+
         case 'get_dashboard_cards':
           return handleGetDashboardCards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this));
         case 'execute_query':

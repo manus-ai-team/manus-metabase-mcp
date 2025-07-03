@@ -1,12 +1,7 @@
 export { handleListDatabases } from './listDatabases.js';
 export { handleGetCardSql } from './getCardSql.js';
-export { handleExecuteCard } from './executeCard.js';
 export { handleGetDashboardCards } from './getDashboardCards.js';
 export { handleExecuteQuery } from './executeQuery.js';
-export { handleGetCards } from './getCards.js';
-export { handleGetDashboards } from './getDashboards.js';
-export { handleFastSearchCards } from './fastSearchCards.js';
-export { handleFastSearchDashboards } from './fastSearchDashboards.js';
 export { handleUnifiedSearch } from './unifiedSearch.js';
 export { handleExportQuery } from './exportQuery.js';
 export { handleClearCache } from './clearCache.js';

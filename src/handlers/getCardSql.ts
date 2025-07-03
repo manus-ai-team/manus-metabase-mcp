@@ -22,19 +22,13 @@ export async function handleGetCardSql(
 
   logDebug(`Fetching SQL details for card with ID: ${cardId}`);
 
-  // Use unified caching system - may benefit from previous bulk fetch
+  // Use caching system for optimal performance
   const startTime = Date.now();
   const card = await apiClient.getCard(cardId);
   const fetchTime = Date.now() - startTime;
 
-  // Determine data source based on fetch time and cache state
-  let dataSource: string;
-  if (fetchTime < 5) {
-    const bulkCacheMetadata = apiClient.getBulkCacheMetadata();
-    dataSource = bulkCacheMetadata.allCardsFetched ? 'unified_cache_bulk' : 'unified_cache_individual';
-  } else {
-    dataSource = 'api_call';
-  }
+  // Determine data source based on fetch time
+  const dataSource = fetchTime < 5 ? 'cache' : 'api';
 
   // Extract relevant information for query execution
   const result: any = {
@@ -60,12 +54,10 @@ export async function handleGetCardSql(
   }
 
   // Add performance info
-  if (dataSource === 'unified_cache_bulk') {
-    result.performance_note = 'Data retrieved from unified cache (populated by previous get_cards call - optimal efficiency)';
-  } else if (dataSource === 'unified_cache_individual') {
-    result.performance_note = 'Data retrieved from unified cache (populated by previous get_card_sql call)';
+  if (dataSource === 'cache') {
+    result.performance_note = 'Data retrieved from cache (optimal efficiency)';
   } else {
-    result.performance_note = 'Data retrieved via direct API call (now cached in unified cache for future requests)';
+    result.performance_note = 'Data retrieved via direct API call (now cached for future requests)';
   }
 
   logInfo(`Successfully retrieved SQL details for card: ${cardId} (source: ${dataSource}, ${fetchTime}ms)`);
