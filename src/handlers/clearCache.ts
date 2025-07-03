@@ -12,10 +12,9 @@ export function handleClearCache(
   logError: (message: string, error: unknown) => void
 ) {
   const cacheType = (request.params?.arguments?.cache_type as string) || 'all';
-  const cardId = request.params?.arguments?.card_id as number;
 
   // Validate cache_type parameter
-  const validCacheTypes = ['all', 'cards', 'dashboards', 'tables', 'databases', 'individual', 'bulk'];
+  const validCacheTypes = ['all', 'cards', 'dashboards', 'tables', 'databases', 'collections', 'fields'];
   if (!validCacheTypes.includes(cacheType)) {
     logWarn(`Invalid cache_type parameter: ${cacheType}`, { validTypes: validCacheTypes });
     throw new McpError(
@@ -24,34 +23,11 @@ export function handleClearCache(
     );
   }
 
-  // Validate card_id parameter when using individual cache type
-  if (cacheType === 'individual' && cardId && (typeof cardId !== 'number' || cardId <= 0)) {
-    logWarn(`Invalid card_id parameter for individual cache clear: ${cardId}`);
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'card_id must be a positive integer when using individual cache type'
-    );
-  }
-
   try {
     let message = '';
     let cacheStatus = '';
 
     switch (cacheType) {
-    case 'individual':
-      if (cardId) {
-        // Clear individual card from API client cache
-        apiClient.clearIndividualCardCache(cardId);
-        message = `Individual card cache cleared for card ${cardId}`;
-        cacheStatus = `card_${cardId}_cache_empty`;
-      } else {
-        // Clear all individual cards from API client cache
-        apiClient.clearAllIndividualCardsCache();
-        message = 'All individual card caches cleared';
-        cacheStatus = 'individual_cache_empty';
-      }
-      break;
-
     case 'cards':
       apiClient.clearCardsCache();
       message = 'Cards cache cleared successfully';
@@ -76,16 +52,22 @@ export function handleClearCache(
       cacheStatus = 'databases_cache_empty';
       break;
 
-    case 'bulk':
-      apiClient.clearCardsCache();
-      message = 'Cards cache cleared (bulk metadata reset)';
-      cacheStatus = 'cards_cache_empty';
+    case 'collections':
+      apiClient.clearCollectionsCache();
+      message = 'Collections cache cleared successfully';
+      cacheStatus = 'collections_cache_empty';
+      break;
+
+    case 'fields':
+      apiClient.clearFieldsCache();
+      message = 'Fields cache cleared successfully';
+      cacheStatus = 'fields_cache_empty';
       break;
 
     case 'all':
     default:
       apiClient.clearAllCache();
-      message = 'All caches cleared successfully (cards, dashboards, tables, and databases)';
+      message = 'All caches cleared successfully (cards, dashboards, tables, databases, collections, and fields)';
       cacheStatus = 'all_caches_empty';
       break;
     }
@@ -98,7 +80,6 @@ export function handleClearCache(
         text: JSON.stringify({
           message,
           cache_type: cacheType,
-          card_id: cardId || null,
           cache_status: cacheStatus,
           next_fetch_will_be: 'fresh from API',
           cache_info: {
