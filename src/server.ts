@@ -21,12 +21,11 @@ import {
 import { MetabaseApiClient } from './api.js';
 import {
   handleListDatabases,
-  handleGetCardSql,
-  handleGetDashboardCards,
   handleExecuteQuery,
   handleUnifiedSearch,
   handleExportQuery,
-  handleClearCache
+  handleClearCache,
+  handleRetrieve
 } from './handlers/index.js';
 
 export class MetabaseServer {
@@ -342,29 +341,36 @@ export class MetabaseServer {
               required: []
             }
           },
-
-
+          {
+            name: 'retrieve',
+            description: '[RECOMMENDED] Unified command to fetch additional details for supported models (Cards, Dashboards, Tables, Databases, Collections, Fields). Supports multiple IDs (max 50 per request) with intelligent concurrent processing and optimized caching.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                model: {
+                  type: 'string',
+                  enum: ['card', 'dashboard', 'table', 'database', 'collection', 'field'],
+                  description: 'Type of model to retrieve. Only one model type allowed per request.'
+                },
+                ids: {
+                  type: 'array',
+                  items: {
+                    type: 'number'
+                  },
+                  description: 'Array of IDs to retrieve (1-50 IDs per request). All IDs must be positive integers. For larger datasets, make multiple requests.',
+                  minItems: 1,
+                  maxItems: 50
+                }
+              },
+              required: ['model', 'ids']
+            }
+          },
           {
             name: 'list_databases',
             description: '[FAST] List all databases in Metabase',
             inputSchema: {
               type: 'object',
               properties: {}
-            }
-          },
-
-          {
-            name: 'get_dashboard_cards',
-            description: '[FAST] Get all cards in a dashboard',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                dashboard_id: {
-                  type: 'number',
-                  description: 'ID of the dashboard'
-                }
-              },
-              required: ['dashboard_id']
             }
           },
           {
@@ -379,7 +385,7 @@ export class MetabaseServer {
                 },
                 query: {
                   type: 'string',
-                  description: 'SQL query to execute. You can modify card queries by getting them via get_card_sql first.'
+                  description: 'SQL query to execute. You can modify card queries by getting them via retrieve first.'
                 },
                 native_parameters: {
                   type: 'array',
@@ -395,20 +401,6 @@ export class MetabaseServer {
                 }
               },
               required: ['database_id', 'query']
-            }
-          },
-          {
-            name: 'get_card_sql',
-            description: '[RECOMMENDED] Get the SQL query and database details from a Metabase card/question. Uses optimized unified caching for maximum efficiency. Use this before execute_query to get the SQL you can modify.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                card_id: {
-                  type: 'number',
-                  description: 'ID of the card/question to get SQL from'
-                }
-              },
-              required: ['card_id']
             }
           },
           {
@@ -448,19 +440,15 @@ export class MetabaseServer {
           },
           {
             name: 'clear_cache',
-            description: '[UTILITY] Clear the internal cache for cards and dashboards data. Useful for debugging or when you know the data has changed.',
+            description: '[UTILITY] Clear the internal cache for stored data. Useful for debugging or when you know the data has changed. Supports model-based cache clearing.',
             inputSchema: {
               type: 'object',
               properties: {
                 cache_type: {
                   type: 'string',
-                  enum: ['all', 'cards', 'dashboards', 'individual', 'bulk'],
-                  description: 'Type of cache to clear: "all" (default - clears both cards and dashboards), "cards" (cards only), "dashboards" (dashboards only), "individual" (single card cache), or "bulk" (cards cache metadata)',
+                  enum: ['all', 'cards', 'dashboards', 'tables', 'databases', 'collections', 'fields'],
+                  description: 'Type of cache to clear: "all" (default - clears all cache types), "cards" (cards only), "dashboards" (dashboards only), "tables" (tables only), "databases" (databases only), "collections" (collections only), or "fields" (fields only)',
                   default: 'all'
-                },
-                card_id: {
-                  type: 'number',
-                  description: 'Optional: Clear cache for specific card ID (only works with cache_type="individual")'
                 }
               },
               required: []
@@ -488,17 +476,15 @@ export class MetabaseServer {
 
         case 'list_databases':
           return handleListDatabases(this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logError.bind(this));
-        case 'get_card_sql':
-          return handleGetCardSql(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
 
-        case 'get_dashboard_cards':
-          return handleGetDashboardCards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'execute_query':
           return handleExecuteQuery(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'export_query':
           return handleExportQuery(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'clear_cache':
           return handleClearCache(request, this.apiClient, this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
+        case 'retrieve':
+          return handleRetrieve(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         default:
           this.logWarn(`Received request for unknown tool: ${request.params?.name}`, { requestId });
           return {

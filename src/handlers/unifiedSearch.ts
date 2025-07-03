@@ -209,37 +209,34 @@ export async function handleUnifiedSearch(
     foundModels.forEach(model => {
       switch (model) {
         case 'card':
-          recommendedActions[model] = 'Use get_card_sql(card_id) to get the SQL query, then execute_query() with the database_id for reliable execution';
+          recommendedActions[model] = 'Use retrieve(model="card", ids=[card_id]) to get the SQL query, then execute_query() with the database_id for reliable execution';
           break;
         case 'dashboard':
-          recommendedActions[model] = 'Use get_dashboard_cards(dashboard_id) to get all cards in this dashboard and their details';
+          recommendedActions[model] = 'Use retrieve(model="dashboard", ids=[dashboard_id]) to get all cards in this dashboard and their details';
           break;
         case 'table':
-          recommendedActions[model] = 'Use execute_query() with database_id to query tables directly with SQL';
-          break;
-        case 'dataset':
-          recommendedActions[model] = 'Use get_card_sql(dataset_id) to get the dataset definition, then execute_query() to run it';
-          break;
-        case 'collection':
-          recommendedActions[model] = 'Use search() with models=[\'card\',\'dashboard\'] to find items within collections';
+          recommendedActions[model] = 'Use retrieve(model="table", ids=[table_id]) to get detailed metadata including column information and relationships';
           break;
         case 'database':
-          recommendedActions[model] = 'Use list_databases() to get full database details, or execute_query() with database_id to run queries';
+          recommendedActions[model] = 'Use retrieve(model="database", ids=[database_id]) to get database details including available tables';
+          break;
+        case 'dataset':
+          recommendedActions[model] = 'Use retrieve(model="card", ids=[dataset_id]) to get the dataset definition, then execute_query() to run it';
+          break;
+        case 'collection':
+          recommendedActions[model] = 'Use retrieve(model="collection", ids=[collection_id]) to get collection details and organizational structure for managing Metabase content like questions and dashboards';
+          break;
+        case 'field':
+          recommendedActions[model] = 'Use retrieve(model="field", ids=[field_id]) to get detailed field metadata including data types and constraints';
           break;
         case 'segment':
-          recommendedActions[model] = 'Use get_card_sql(segment_id) to get the segment definition and apply it in your queries';
+          recommendedActions[model] = 'Use retrieve(model="card", ids=[segment_id]) to get the segment definition and apply it in your queries';
           break;
         case 'metric':
-          recommendedActions[model] = 'Use get_card_sql(metric_id) to get the metric definition and incorporate it into your analysis';
-          break;
-        case 'action':
-          recommendedActions[model] = 'Actions are executable procedures - check Metabase UI for action parameters and execution options';
-          break;
-        case 'indexed-entity':
-          recommendedActions[model] = 'Use search() with specific query terms to find related content for indexed entities';
+          recommendedActions[model] = 'Use retrieve(model="card", ids=[metric_id]) to get the metric definition and incorporate it into your analysis';
           break;
         default:
-          recommendedActions[model] = `Use search() with model=['${model}'] to find similar items or explore this content type`;
+          recommendedActions[model] = 'Use the appropriate retrieve() command with the model type and ID to get detailed information';
       }
     });
 
