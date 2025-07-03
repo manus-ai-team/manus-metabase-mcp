@@ -29,6 +29,7 @@ import {
   handleGetDashboards,
   handleFastSearchCards,
   handleFastSearchDashboards,
+  handleUnifiedSearch,
   handleExportQuery,
   handleClearCache
 } from './handlers/index.js';
@@ -289,8 +290,66 @@ export class MetabaseServer {
       return {
         tools: [
           {
+            name: 'search',
+            description: '[RECOMMENDED] Unified search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, and more. Use this FIRST for finding any Metabase content. Much faster than get_cards/get_dashboards as it uses server-side search.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Search query - searches across names, descriptions, and metadata'
+                },
+                models: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                    enum: ['card', 'dashboard', 'table', 'dataset', 'segment', 'collection', 'database', 'action', 'indexed-entity', 'metric']
+                  },
+                  description: 'Model types to search (default: ["card", "dashboard"]). Can search multiple types in one call.',
+                  default: ['card', 'dashboard']
+                },
+                max_results: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 50)',
+                  minimum: 1,
+                  maximum: 200,
+                  default: 50
+                },
+                search_native_query: {
+                  type: 'boolean',
+                  description: 'Search within SQL query content of cards (default: false)',
+                  default: false
+                },
+                include_dashboard_questions: {
+                  type: 'boolean',
+                  description: 'Include questions within dashboards in results (default: false)',
+                  default: false
+                },
+                ids: {
+                  type: 'array',
+                  items: { type: 'number' },
+                  description: 'Search for specific IDs (only works with single model type)'
+                },
+                archived: {
+                  type: 'boolean',
+                  description: 'Search archived items only (default: false)'
+                },
+                database_id: {
+                  type: 'number',
+                  description: 'Search items from specific database ID'
+                },
+                verified: {
+                  type: 'boolean',
+                  description: 'Search verified items only (requires premium features)'
+                },
+
+              },
+              required: []
+            }
+          },
+          {
             name: 'search_cards',
-            description: '[RECOMMENDED] Fast search for questions/cards using Metabase native search API. Use this FIRST when looking for specific cards by name, description, or metadata. Much faster than get_cards for targeted searches.',
+            description: '[DEPRECATED] Use unified search tool instead. Fast search for questions/cards using Metabase native search API.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -311,7 +370,7 @@ export class MetabaseServer {
           },
           {
             name: 'search_dashboards',
-            description: '[RECOMMENDED] Fast search for dashboards using Metabase native search API. Use this FIRST when looking for specific dashboards by name, description, or metadata. Much faster than get_dashboards for targeted searches.',
+            description: '[DEPRECATED] Use unified search tool instead. Fast search for dashboards using Metabase native search API.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -332,7 +391,7 @@ export class MetabaseServer {
           },
           {
             name: 'get_cards',
-            description: '[SLOW] Get all questions/cards in Metabase with optional advanced search. WARNING: This fetches ALL cards from the server and can be very slow on large Metabase instances. Use search_cards instead for finding specific cards. Only use this when you need comprehensive data analysis, advanced fuzzy matching, or SQL content search.',
+            description: '[LEGACY] Get all questions/cards in Metabase with optional advanced search. WARNING: This fetches ALL cards from the server and can be very slow on large Metabase instances. Use unified search tool instead for finding specific cards. Only use this when you need comprehensive data analysis or advanced fuzzy matching.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -366,7 +425,7 @@ export class MetabaseServer {
           },
           {
             name: 'get_dashboards',
-            description: '[SLOW] Get all dashboards in Metabase with optional advanced search. WARNING: This fetches ALL dashboards from the server and can be slow on large Metabase instances. Use search_dashboards instead for finding specific dashboards. Only use this when you need comprehensive data analysis or advanced fuzzy matching.',
+            description: '[LEGACY] Get all dashboards in Metabase with optional advanced search. WARNING: This fetches ALL dashboards from the server and can be slow on large Metabase instances. Use unified search tool instead for finding specific dashboards. Only use this when you need comprehensive data analysis or advanced fuzzy matching.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -554,9 +613,13 @@ export class MetabaseServer {
 
       try {
         switch (request.params?.name) {
+        case 'search':
+          return handleUnifiedSearch(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'search_cards':
+          this.logWarn('search_cards is deprecated - use unified search tool instead', { requestId });
           return handleFastSearchCards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'search_dashboards':
+          this.logWarn('search_dashboards is deprecated - use unified search tool instead', { requestId });
           return handleFastSearchDashboards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'get_cards':
           return handleGetCards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this));
