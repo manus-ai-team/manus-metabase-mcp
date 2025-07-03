@@ -26,7 +26,8 @@ import {
   handleExecuteQuery,
   handleUnifiedSearch,
   handleExportQuery,
-  handleClearCache
+  handleClearCache,
+  handleRetrieve
 } from './handlers/index.js';
 
 export class MetabaseServer {
@@ -448,14 +449,14 @@ export class MetabaseServer {
           },
           {
             name: 'clear_cache',
-            description: '[UTILITY] Clear the internal cache for cards and dashboards data. Useful for debugging or when you know the data has changed.',
+            description: '[UTILITY] Clear the internal cache for stored data. Useful for debugging or when you know the data has changed. Now supports tables and databases in addition to cards and dashboards.',
             inputSchema: {
               type: 'object',
               properties: {
                 cache_type: {
                   type: 'string',
-                  enum: ['all', 'cards', 'dashboards', 'individual', 'bulk'],
-                  description: 'Type of cache to clear: "all" (default - clears both cards and dashboards), "cards" (cards only), "dashboards" (dashboards only), "individual" (single card cache), or "bulk" (cards cache metadata)',
+                  enum: ['all', 'cards', 'dashboards', 'tables', 'databases', 'individual', 'bulk'],
+                  description: 'Type of cache to clear: "all" (default - clears all cache types), "cards" (cards only), "dashboards" (dashboards only), "tables" (tables only), "databases" (databases only), "individual" (single card cache), or "bulk" (cards cache metadata)',
                   default: 'all'
                 },
                 card_id: {
@@ -464,6 +465,29 @@ export class MetabaseServer {
                 }
               },
               required: []
+            }
+          },
+          {
+            name: 'retrieve',
+            description: '[RECOMMENDED] Unified command to fetch additional details for supported models (Cards, Dashboards, Tables, Databases). Supports multiple IDs and uses optimized caching. Replaces individual get_card_sql and get_dashboard_cards commands.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                model: {
+                  type: 'string',
+                  enum: ['card', 'dashboard', 'table', 'database'],
+                  description: 'Type of model to retrieve. Only one model type allowed per request.'
+                },
+                ids: {
+                  type: 'array',
+                  items: {
+                    type: 'number'
+                  },
+                  description: 'Array of IDs to retrieve. All IDs must be positive integers.',
+                  minItems: 1
+                }
+              },
+              required: ['model', 'ids']
             }
           }
         ]
@@ -499,6 +523,8 @@ export class MetabaseServer {
           return handleExportQuery(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'clear_cache':
           return handleClearCache(request, this.apiClient, this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
+        case 'retrieve':
+          return handleRetrieve(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         default:
           this.logWarn(`Received request for unknown tool: ${request.params?.name}`, { requestId });
           return {

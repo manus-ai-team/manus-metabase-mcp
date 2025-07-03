@@ -15,7 +15,7 @@ export function handleClearCache(
   const cardId = request.params?.arguments?.card_id as number;
 
   // Validate cache_type parameter
-  const validCacheTypes = ['all', 'cards', 'dashboards', 'individual', 'bulk'];
+  const validCacheTypes = ['all', 'cards', 'dashboards', 'tables', 'databases', 'individual', 'bulk'];
   if (!validCacheTypes.includes(cacheType)) {
     logWarn(`Invalid cache_type parameter: ${cacheType}`, { validTypes: validCacheTypes });
     throw new McpError(
@@ -64,6 +64,18 @@ export function handleClearCache(
       cacheStatus = 'dashboards_cache_empty';
       break;
 
+    case 'tables':
+      apiClient.clearTablesCache();
+      message = 'Tables cache cleared successfully';
+      cacheStatus = 'tables_cache_empty';
+      break;
+
+    case 'databases':
+      apiClient.clearDatabasesCache();
+      message = 'Databases cache cleared successfully';
+      cacheStatus = 'databases_cache_empty';
+      break;
+
     case 'bulk':
       apiClient.clearCardsCache();
       message = 'Cards cache cleared (bulk metadata reset)';
@@ -73,7 +85,7 @@ export function handleClearCache(
     case 'all':
     default:
       apiClient.clearAllCache();
-      message = 'All caches cleared successfully (cards and dashboards)';
+      message = 'All caches cleared successfully (cards, dashboards, tables, and databases)';
       cacheStatus = 'all_caches_empty';
       break;
     }

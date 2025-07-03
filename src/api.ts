@@ -21,6 +21,8 @@ export class MetabaseApiClient {
   // Individual item cache system
   private cardCache: Map<number, { data: any; timestamp: number }> = new Map();
   private dashboardCache: Map<number, { data: any; timestamp: number }> = new Map();
+  private tableCache: Map<number, { data: any; timestamp: number }> = new Map();
+  private databaseCache: Map<number, { data: any; timestamp: number }> = new Map();
   private readonly CACHE_TTL_MS: number;
   private readonly REQUEST_TIMEOUT_MS: number;
 
@@ -256,12 +258,14 @@ export class MetabaseApiClient {
   }
 
   /**
-   * Clear all caches (cards and dashboards)
+   * Clear all caches (cards, dashboards, tables, and databases)
    */
   clearAllCache(): void {
     this.clearCardsCache();
     this.clearDashboardsCache();
-    this.logInfo('All caches cleared (cards and dashboards)');
+    this.clearTablesCache();
+    this.clearDatabasesCache();
+    this.logInfo('All caches cleared (cards, dashboards, tables, and databases)');
   }
 
   /**
@@ -323,5 +327,147 @@ export class MetabaseApiClient {
         'Failed to authenticate with Metabase'
       );
     }
+  }
+
+  /**
+   * Get a single table with caching - fetches query metadata
+   */
+  async getTable(tableId: number): Promise<any> {
+    const now = Date.now();
+    const cached = this.tableCache.get(tableId);
+
+    // Check if we have cached data that's still valid
+    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug(`Using cached data for table ${tableId}`);
+      return cached.data;
+    }
+
+    // Cache miss or stale, fetch from API
+    this.logDebug(`Fetching fresh data for table ${tableId} from Metabase API`);
+    const startTime = Date.now();
+
+    try {
+      const table = await this.request<any>(`/api/table/${tableId}/query_metadata`);
+      const fetchTime = Date.now() - startTime;
+
+      // Update cache with full table data
+      this.tableCache.set(tableId, {
+        data: table,
+        timestamp: now
+      });
+
+      this.logInfo(`Successfully fetched table ${tableId} in ${fetchTime}ms`);
+      return table;
+    } catch (error) {
+      this.logError(`Failed to fetch table ${tableId} from Metabase API`, error);
+
+      // If we have stale cached data, return it as fallback
+      if (cached) {
+        this.logWarn(`Using stale cached data for table ${tableId} as fallback due to API error`);
+        return cached.data;
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single database with caching - includes tables
+   */
+  async getDatabase(databaseId: number): Promise<any> {
+    const now = Date.now();
+    const cached = this.databaseCache.get(databaseId);
+
+    // Check if we have cached data that's still valid
+    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug(`Using cached data for database ${databaseId}`);
+      return cached.data;
+    }
+
+    // Cache miss or stale, fetch from API
+    this.logDebug(`Fetching fresh data for database ${databaseId} from Metabase API`);
+    const startTime = Date.now();
+
+    try {
+      const database = await this.request<any>(`/api/database/${databaseId}?include=tables`);
+      const fetchTime = Date.now() - startTime;
+
+      // Update cache with full database data
+      this.databaseCache.set(databaseId, {
+        data: database,
+        timestamp: now
+      });
+
+      this.logInfo(`Successfully fetched database ${databaseId} in ${fetchTime}ms`);
+      return database;
+    } catch (error) {
+      this.logError(`Failed to fetch database ${databaseId} from Metabase API`, error);
+
+      // If we have stale cached data, return it as fallback
+      if (cached) {
+        this.logWarn(`Using stale cached data for database ${databaseId} as fallback due to API error`);
+        return cached.data;
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get dashboard items (cards within dashboard) with caching
+   */
+  async getDashboardItems(dashboardId: number): Promise<any> {
+    const now = Date.now();
+
+    // Check if we have a cached version that's still valid
+    const cached = this.dashboardCache.get(dashboardId);
+    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug(`Using cached data for dashboard ${dashboardId} items`);
+      return cached.data;
+    }
+
+    // Cache miss or stale, fetch from API
+    this.logDebug(`Fetching dashboard ${dashboardId} items from Metabase API (cache miss or stale)`);
+    const startTime = Date.now();
+
+    try {
+      const dashboardItems = await this.request<any>(`/api/dashboard/${dashboardId}/items`);
+      const fetchTime = Date.now() - startTime;
+
+      // Cache the result
+      this.dashboardCache.set(dashboardId, {
+        data: dashboardItems,
+        timestamp: now
+      });
+
+      this.logInfo(`Successfully fetched dashboard ${dashboardId} items in ${fetchTime}ms`);
+      return dashboardItems;
+    } catch (error) {
+      this.logError(`Failed to fetch dashboard ${dashboardId} items from Metabase API`, error);
+
+      // If we have any cached version (even stale), return it as fallback
+      if (cached) {
+        this.logWarn(`Using stale cached data for dashboard ${dashboardId} items as fallback due to API error`);
+        return cached.data;
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the tables cache
+   */
+  clearTablesCache(): void {
+    this.tableCache.clear();
+    this.logDebug('Tables cache cleared');
+  }
+
+  /**
+   * Clear the databases cache
+   */
+  clearDatabasesCache(): void {
+    this.databaseCache.clear();
+    this.logDebug('Databases cache cleared');
   }
 }
