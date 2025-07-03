@@ -561,59 +561,7 @@ export class MetabaseApiClient {
     }
   }
 
-  /**
-   * Get dashboard items (cards within dashboard) with caching
-   */
-  async getDashboardItems(dashboardId: number): Promise<CachedResponse<any>> {
-    const now = Date.now();
 
-    // Check if we have a cached version that's still valid
-    const cached = this.dashboardCache.get(dashboardId);
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
-      this.logDebug(`Using cached data for dashboard ${dashboardId} items`);
-      return {
-        data: cached.data,
-        source: 'cache',
-        fetchTime: 0
-      };
-    }
-
-    // Cache miss or stale, fetch from API
-    this.logDebug(`Fetching dashboard ${dashboardId} items from Metabase API (cache miss or stale)`);
-    const startTime = Date.now();
-
-    try {
-      const dashboardItems = await this.request<any>(`/api/dashboard/${dashboardId}/items`);
-      const fetchTime = Date.now() - startTime;
-
-      // Cache the result
-      this.dashboardCache.set(dashboardId, {
-        data: dashboardItems,
-        timestamp: now
-      });
-
-      this.logInfo(`Successfully fetched dashboard ${dashboardId} items in ${fetchTime}ms`);
-      return {
-        data: dashboardItems,
-        source: 'api',
-        fetchTime
-      };
-    } catch (error) {
-      this.logError(`Failed to fetch dashboard ${dashboardId} items from Metabase API`, error);
-
-      // If we have any cached version (even stale), return it as fallback
-      if (cached) {
-        this.logWarn(`Using stale cached data for dashboard ${dashboardId} items as fallback due to API error`);
-        return {
-          data: cached.data,
-          source: 'cache',
-          fetchTime: 0
-        };
-      }
-
-      throw error;
-    }
-  }
 
   /**
    * Clear the tables cache

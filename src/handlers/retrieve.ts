@@ -105,7 +105,7 @@ export async function handleRetrieve(
             response = await apiClient.getCard(id);
             break;
           case 'dashboard':
-            response = await apiClient.getDashboardItems(id);
+            response = await apiClient.getDashboard(id);
             break;
           case 'table':
             response = await apiClient.getTable(id);
@@ -231,7 +231,7 @@ export async function handleRetrieve(
         response.usage_guidance = 'Use the database_id and dataset_query.native.query with execute_query to run queries. You can modify the SQL as needed.';
         break;
       case 'dashboard':
-        response.usage_guidance = 'Dashboard items contain the individual cards/questions within the dashboard. Use retrieve with model="card" to get SQL for specific cards.';
+        response.usage_guidance = 'Dashboard data includes full metadata, layout, and all cards/questions within the dashboard. Use retrieve with model="card" to get SQL for specific cards found in the dashboard.';
         break;
       case 'table':
         response.usage_guidance = 'Table metadata includes column information, data types, and relationships. Use this data to construct queries against the table.';
