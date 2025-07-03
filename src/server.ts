@@ -286,13 +286,13 @@ export class MetabaseServer {
         tools: [
           {
             name: 'search',
-            description: '[RECOMMENDED] Unified search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, and more. Use this FIRST for finding any Metabase content. Uses server-side search for optimal performance.',
+            description: '[RECOMMENDED] Unified search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, databases, and more. Use this FIRST for finding any Metabase content. Returns search metrics, unified recommendations, and clean results organized by model type.',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Search query - searches across names, descriptions, and metadata'
+                  description: 'Search query - searches across names, descriptions, and metadata. Required for database searches.'
                 },
                 models: {
                   type: 'array',
@@ -300,7 +300,7 @@ export class MetabaseServer {
                     type: 'string',
                     enum: ['card', 'dashboard', 'table', 'dataset', 'segment', 'collection', 'database', 'action', 'indexed-entity', 'metric']
                   },
-                  description: 'Model types to search (default: ["card", "dashboard"]). Can search multiple types in one call.',
+                  description: 'Model types to search (default: ["card", "dashboard"]). RESTRICTION: "database" model cannot be mixed with others and must be used exclusively.',
                   default: ['card', 'dashboard']
                 },
                 max_results: {
@@ -323,7 +323,7 @@ export class MetabaseServer {
                 ids: {
                   type: 'array',
                   items: { type: 'number' },
-                  description: 'Search for specific IDs (only works with single model type)'
+                  description: 'Search for specific IDs. RESTRICTIONS: Only works with single model type, cannot be used with "table" or "database" models.'
                 },
                 archived: {
                   type: 'boolean',
@@ -331,7 +331,7 @@ export class MetabaseServer {
                 },
                 database_id: {
                   type: 'number',
-                  description: 'Search items from specific database ID'
+                  description: 'Search items from specific database ID. RESTRICTION: Cannot be used when searching for databases (models=["database"]).'
                 },
                 verified: {
                   type: 'boolean',

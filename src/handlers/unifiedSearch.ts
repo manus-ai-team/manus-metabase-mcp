@@ -22,12 +22,12 @@ export async function handleUnifiedSearch(
   const databaseId = request.params?.arguments?.database_id as number | undefined;
   const verified = request.params?.arguments?.verified as boolean | undefined;
 
-
-  if (!searchQuery && (!ids || ids.length === 0)) {
-    logWarn('Missing query or ids parameter in unified search request', { requestId });
+  // Updated validation: allow searching without query/id if database_id is provided
+  if (!searchQuery && (!ids || ids.length === 0) && !databaseId) {
+    logWarn('Missing query, ids, or database_id parameter in unified search request', { requestId });
     throw new McpError(
       ErrorCode.InvalidParams,
-      'Either search query or ids parameter is required'
+      'Either search query, ids parameter, or database_id is required'
     );
   }
 
@@ -46,6 +46,42 @@ export async function handleUnifiedSearch(
     throw new McpError(
       ErrorCode.InvalidParams,
       'ids parameter can only be used when searching a single model type'
+    );
+  }
+
+  // Validate ids usage - not allowed with 'table' model
+  if (ids && ids.length > 0 && models.includes('table')) {
+    logWarn('ids parameter cannot be used with table model', { requestId });
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'ids parameter cannot be used when searching for tables - use query or database_id instead'
+    );
+  }
+
+  // Validate database searches - only allow query parameter when searching solely for databases
+  if (models.length === 1 && models[0] === 'database') {
+    if (ids && ids.length > 0) {
+      logWarn('ids parameter cannot be used when searching solely for databases', { requestId });
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'ids parameter cannot be used when searching for databases - use query instead'
+      );
+    }
+    if (databaseId) {
+      logWarn('database_id parameter cannot be used when searching solely for databases', { requestId });
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'database_id parameter cannot be used when searching for databases - use query instead'
+      );
+    }
+  }
+
+  // Validate database model exclusivity - database searches must be exclusive
+  if (models.includes('database') && models.length > 1) {
+    logWarn('database model cannot be mixed with other models', { requestId });
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'database model cannot be combined with other model types - search for databases separately'
     );
   }
 
@@ -109,8 +145,6 @@ export async function handleUnifiedSearch(
       searchParams.append('verified', 'true');
     }
 
-
-
     const response = await apiClient.request<any>(`/api/search?${searchParams.toString()}`);
     const searchTime = Date.now() - searchStartTime;
 
@@ -122,35 +156,19 @@ export async function handleUnifiedSearch(
       results = [];
     }
 
-    // Enhance results with model-specific metadata and recommendations
+        // Enhance results with model-specific metadata (without individual recommendations)
     const enhancedResults = results.map((item: any) => {
-      const baseItem = {
+      // Base item without created_at and updated_at
+      return {
         id: item.id,
         name: item.name,
         description: item.description,
         model: item.model,
         collection_name: item.collection_name,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
         database_id: item.database_id || null,
         table_id: item.table_id || null,
         archived: item.archived || false
       };
-
-      // Add model-specific recommendations
-      if (item.model === 'card') {
-        return {
-          ...baseItem,
-          recommended_action: `Use get_card_sql(${item.id}) then execute_query() for reliable execution`,
-        };
-      } else if (item.model === 'dashboard') {
-        return {
-          ...baseItem,
-          recommended_action: `Use get_dashboard_cards(${item.id}) to get dashboard details`
-        };
-      } else {
-        return baseItem;
-      }
     });
 
     // Group results by model type for better organization
@@ -163,7 +181,8 @@ export async function handleUnifiedSearch(
     }, {});
 
     const totalResults = enhancedResults.length;
-    const searchMethod = ids && ids.length > 0 ? 'id_search' : 'query_search';
+    const searchMethod = ids && ids.length > 0 ? 'id_search' :
+                       databaseId && !searchQuery ? 'database_search' : 'query_search';
 
     logInfo(`Unified search found ${totalResults} items across ${Object.keys(resultsByModel).length} model types in ${searchTime}ms`);
 
@@ -182,6 +201,47 @@ export async function handleUnifiedSearch(
     if (databaseId) usedParameters.database_id = databaseId;
     if (verified === true) usedParameters.verified = verified;
 
+    // Generate unified recommended actions based on found models
+    const foundModels = Object.keys(resultsByModel);
+    const recommendedActions: { [key: string]: string } = {};
+
+    foundModels.forEach(model => {
+      switch (model) {
+        case 'card':
+          recommendedActions[model] = 'Use get_card_sql(card_id) to get the SQL query, then execute_query() with the database_id for reliable execution';
+          break;
+        case 'dashboard':
+          recommendedActions[model] = 'Use get_dashboard_cards(dashboard_id) to get all cards in this dashboard and their details';
+          break;
+        case 'table':
+          recommendedActions[model] = 'Use execute_query() with database_id to query tables directly with SQL';
+          break;
+        case 'dataset':
+          recommendedActions[model] = 'Use get_card_sql(dataset_id) to get the dataset definition, then execute_query() to run it';
+          break;
+        case 'collection':
+          recommendedActions[model] = 'Use search() with models=[\'card\',\'dashboard\'] to find items within collections';
+          break;
+        case 'database':
+          recommendedActions[model] = 'Use list_databases() to get full database details, or execute_query() with database_id to run queries';
+          break;
+        case 'segment':
+          recommendedActions[model] = 'Use get_card_sql(segment_id) to get the segment definition and apply it in your queries';
+          break;
+        case 'metric':
+          recommendedActions[model] = 'Use get_card_sql(metric_id) to get the metric definition and incorporate it into your analysis';
+          break;
+        case 'action':
+          recommendedActions[model] = 'Actions are executable procedures - check Metabase UI for action parameters and execution options';
+          break;
+        case 'indexed-entity':
+          recommendedActions[model] = 'Use search() with specific query terms to find related content for indexed entities';
+          break;
+        default:
+          recommendedActions[model] = `Use search() with model=['${model}'] to find similar items or explore this content type`;
+      }
+    });
+
     return {
       content: [{
         type: 'text',
@@ -192,6 +252,7 @@ export async function handleUnifiedSearch(
             search_time_ms: searchTime,
             parameters_used: usedParameters
           },
+          recommended_actions: recommendedActions,
           results_by_model: Object.keys(resultsByModel).map(model => ({
             model,
             count: resultsByModel[model].length
