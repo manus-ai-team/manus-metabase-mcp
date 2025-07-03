@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../api.js';
-import { ErrorCode, McpError, ApiError } from '../types.js';
+import { ErrorCode, McpError } from '../types.js';
+import { handleApiError } from '../utils.js';
 import { config, authMethod, AuthMethod } from '../config.js';
 import { sanitizeFilename } from '../utils.js';
 import * as fs from 'fs';
@@ -245,24 +246,16 @@ export async function handleExportQuery(
         text: JSON.stringify(successResponse, null, 2)
       }]
     };
-  } catch (error) {
-    const apiError = error as ApiError;
-    const errorMessage = apiError.data?.message || apiError.message || 'Unknown error';
-
-    logError(`Failed to export query in ${format} format: ${errorMessage}`, error);
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          success: false,
-          message: "Export failed",
-          error: errorMessage,
-          query: query,
-          database_id: databaseId,
-          format: format
-        }, null, 2)
-      }],
-      isError: true
-    };
+  } catch (error: any) {
+    throw handleApiError(error, {
+      operation: 'Export query',
+      resourceType: 'database',
+      resourceId: databaseId,
+      customMessages: {
+        '400': 'Invalid query parameters, SQL syntax error, or export format issue. Ensure format is csv, json, or xlsx.',
+        '413': 'Export payload too large. Try reducing the result set size or use query filters.',
+        '500': 'Database server error. The query may have caused a timeout or database issue.'
+      }
+    }, logError);
   }
 }

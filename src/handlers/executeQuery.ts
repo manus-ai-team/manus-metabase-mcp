@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../api.js';
-import { ErrorCode, McpError, ApiError } from '../types.js';
+import { ErrorCode, McpError } from '../types.js';
+import { handleApiError } from '../utils.js';
 
 export async function handleExecuteQuery(
   request: z.infer<typeof CallToolRequestSchema>,
@@ -143,24 +144,15 @@ export async function handleExecuteQuery(
         }, null, 2)
       }]
     };
-  } catch (error) {
-    const apiError = error as ApiError;
-    const errorMessage = apiError.data?.message || apiError.message || 'Unknown error';
-
-    logError(`Failed to execute query: ${errorMessage}`, error);
-
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          success: false,
-          message: "Query execution failed",
-          error: errorMessage,
-          query: query,
-          database_id: databaseId
-        }, null, 2)
-      }],
-      isError: true
-    };
+  } catch (error: any) {
+    throw handleApiError(error, {
+      operation: 'SQL query execution',
+      resourceType: 'database',
+      resourceId: databaseId as number,
+      customMessages: {
+        '400': 'Invalid query parameters or SQL syntax error. Check your query syntax and ensure all table/column names are correct.',
+        '500': 'Database server error. The query may have caused a timeout or database issue.'
+      }
+    }, logError);
   }
 }

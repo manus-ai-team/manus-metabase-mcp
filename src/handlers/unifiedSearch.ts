@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../api.js';
 import { ErrorCode, McpError } from '../types.js';
+import { handleApiError } from '../utils.js';
 
 export async function handleUnifiedSearch(
   request: z.infer<typeof CallToolRequestSchema>,
@@ -262,62 +263,15 @@ export async function handleUnifiedSearch(
       }]
     };
   } catch (error: any) {
-    logError('Unified search failed', error);
-
-    // Extract detailed error information
-    let errorMessage = 'Unified search failed';
-    let errorDetails = '';
-    let statusCode = 'unknown';
-
-    if (error?.response) {
-      // HTTP error response
-      statusCode = error.response.status?.toString() || 'unknown';
-      const responseData = error.response.data || error.response;
-
-      if (typeof responseData === 'string') {
-        errorDetails = responseData;
-      } else if (responseData?.message) {
-        errorDetails = responseData.message;
-      } else if (responseData?.error) {
-        errorDetails = responseData.error;
-      } else {
-        errorDetails = JSON.stringify(responseData);
+    throw handleApiError(error, {
+      operation: 'Unified search',
+      resourceType: databaseId ? 'database' : undefined,
+      resourceId: databaseId,
+      customMessages: {
+        '400': 'Invalid search parameters. Check model types, database_id, or premium feature requirements (verified parameter).',
+        '403': 'Access denied. You may not have permission to search these items.',
+        '404': 'Search endpoint not found. This Metabase version may not support the search API.'
       }
-
-      errorMessage = `Metabase API error (${statusCode})`;
-
-      // Provide specific guidance for common errors
-      if (statusCode === '400') {
-        if (errorDetails.includes('verified') || errorDetails.includes('premium')) {
-          errorMessage += ': The verified parameter requires premium features. Try removing verified parameter or ensure your Metabase instance has premium features enabled.';
-        } else if (errorDetails.includes('database') || errorDetails.includes('table_db_id')) {
-          errorMessage += ': Invalid database_id parameter. Ensure the database ID exists and you have access to it.';
-        } else if (errorDetails.includes('models') || errorDetails.includes('model')) {
-          errorMessage += ': Invalid model types specified. Check that all model types are valid: card, dashboard, table, dataset, segment, collection, database, action, indexed-entity, metric.';
-        } else {
-          errorMessage += ': Invalid search parameters.';
-        }
-      } else if (statusCode === '401') {
-        errorMessage += ': Authentication failed. Check your API key or session.';
-      } else if (statusCode === '403') {
-        errorMessage += ': Access denied. You may not have permission to search these items.';
-      } else if (statusCode === '404') {
-        errorMessage += ': Search endpoint not found. This Metabase version may not support the search API.';
-      }
-    } else if (error?.message) {
-      errorDetails = error.message;
-      errorMessage = `Search request failed: ${error.message}`;
-    } else {
-      errorDetails = String(error);
-      errorMessage = 'Unknown search error occurred';
-    }
-
-    // Log detailed error for debugging
-    logError(`Detailed search error - Status: ${statusCode}, Details: ${errorDetails}`, error);
-
-    throw new McpError(
-      ErrorCode.InternalError,
-      `${errorMessage}${errorDetails ? ` Details: ${errorDetails}` : ''}`
-    );
+    }, logError);
   }
 }

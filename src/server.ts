@@ -487,18 +487,18 @@ export class MetabaseServer {
           return handleUnifiedSearch(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
 
         case 'list_databases':
-          return handleListDatabases(this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this));
+          return handleListDatabases(this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logError.bind(this));
         case 'get_card_sql':
-          return handleGetCardSql(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this));
+          return handleGetCardSql(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
 
         case 'get_dashboard_cards':
-          return handleGetDashboardCards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this));
+          return handleGetDashboardCards(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'execute_query':
           return handleExecuteQuery(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'export_query':
           return handleExportQuery(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         case 'clear_cache':
-          return handleClearCache(request, this.apiClient, this.logInfo.bind(this));
+          return handleClearCache(request, this.apiClient, this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
         default:
           this.logWarn(`Received request for unknown tool: ${request.params?.name}`, { requestId });
           return {
@@ -512,17 +512,22 @@ export class MetabaseServer {
           };
         }
       } catch (error) {
+        // If it's already an McpError, re-throw it to be handled by the MCP framework
+        if (error instanceof McpError) {
+          throw error;
+        }
+
+        // Handle other errors with generic fallback
         const apiError = error as ApiError;
         const errorMessage = apiError.data?.message || apiError.message || 'Unknown error';
 
         this.logError(`Tool execution failed: ${errorMessage}`, error);
-        return {
-          content: [{
-            type: 'text',
-            text: `Metabase API error: ${errorMessage}`
-          }],
-          isError: true
-        };
+
+        // Create an McpError for consistent error handling
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Tool execution failed: ${errorMessage}`
+        );
       }
     });
   }
