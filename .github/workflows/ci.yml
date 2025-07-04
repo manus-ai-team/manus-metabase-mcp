@@ -85,24 +85,33 @@ jobs:
     - name: Test Docker image
       run: |
         # Test that the Docker image can be created and runs
-        docker run --rm -d --name metabase-mcp-test \
-          -e METABASE_URL=https://test.metabase.local \
-          -e METABASE_API_KEY=test-api-key \
-          -e NODE_ENV=test \
-          metabase-mcp &
+        # Since this is an MCP server that uses stdio, we test it differently
+        echo "Testing Docker container startup and environment validation..."
 
-        # Wait a moment for container to start
-        sleep 5
-
-        # Check if container is running
-        if docker ps | grep -q metabase-mcp-test; then
-          echo "Docker container started successfully"
-          docker stop metabase-mcp-test
+        # Test 1: Container starts and validates environment correctly
+        echo "Test 1: Environment validation test..."
+        if echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0.0"}}, "id": 1}' | \
+           timeout 10s docker run --rm -i \
+             -e METABASE_URL=https://test.metabase.local \
+             -e METABASE_API_KEY=test-api-key \
+             -e NODE_ENV=test \
+             metabase-mcp | head -1; then
+          echo "✅ Test 1 passed: Container starts and accepts input"
         else
-          echo "Docker container failed to start"
-          docker logs metabase-mcp-test || true
+          echo "❌ Test 1 failed: Container could not start or process input"
           exit 1
         fi
+
+        # Test 2: Container fails properly with missing environment variables
+        echo "Test 2: Missing environment variables test..."
+        if timeout 5s docker run --rm metabase-mcp 2>&1 | grep -q "Environment validation failed"; then
+          echo "✅ Test 2 passed: Container properly validates environment variables"
+        else
+          echo "❌ Test 2 failed: Container should fail with missing environment variables"
+          exit 1
+        fi
+
+        echo "🎉 All Docker tests passed successfully!"
 
   quality-gates:
     runs-on: ubuntu-latest

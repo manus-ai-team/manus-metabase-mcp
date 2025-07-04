@@ -1,0 +1,57 @@
+# Development environment files (these should not be in production containers)
+.env
+.env.local
+.env.development
+.env.test
+
+# Node.js
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing and coverage
+coverage
+*.lcov
+
+# Build artifacts (will be built inside container)
+build
+dist
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# CI/CD and development scripts
+.github/
+.husky/
+scripts/
+
+# Development configuration (keep essential build configs)
+.eslintrc.json
+.prettierrc
+.prettierignore
+vitest.config.ts
+smithery.yaml
+
+# Tests (keep for Docker build, but could be excluded in production)
+# tests/
