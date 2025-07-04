@@ -22,7 +22,7 @@ import { MetabaseApiClient } from './api.js';
 import {
   handleListDatabases,
   handleExecuteQuery,
-  handleUnifiedSearch,
+  handleSearch,
   handleExportQuery,
   handleClearCache,
   handleRetrieve
@@ -285,13 +285,13 @@ export class MetabaseServer {
         tools: [
           {
             name: 'search',
-            description: '[RECOMMENDED] Unified search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, databases, and more. Use this FIRST for finding any Metabase content. Returns search metrics, unified recommendations, and clean results organized by model type.',
+            description: '[RECOMMENDED] Search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, databases, and more. Use this FIRST for finding any Metabase content. Returns search metrics, recommendations, and clean results organized by model type.',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Search query - searches across names, descriptions, and metadata. Required for database searches.'
+                  description: 'Search across names, descriptions, and metadata.'
                 },
                 models: {
                   type: 'array',
@@ -311,12 +311,12 @@ export class MetabaseServer {
                 },
                 search_native_query: {
                   type: 'boolean',
-                  description: 'Search within SQL query content of cards (default: false)',
+                  description: 'Search within SQL query content of cards (default: false). RESTRICTION: Only works when models=["card"] exclusively.',
                   default: false
                 },
                 include_dashboard_questions: {
                   type: 'boolean',
-                  description: 'Include questions within dashboards in results (default: false)',
+                  description: 'Include questions within dashboards in results (default: false). RESTRICTION: Only works when "dashboard" is included in models.',
                   default: false
                 },
                 ids: {
@@ -343,7 +343,7 @@ export class MetabaseServer {
           },
           {
             name: 'retrieve',
-            description: '[RECOMMENDED] Unified command to fetch additional details for supported models (Cards, Dashboards, Tables, Databases, Collections, Fields). Supports multiple IDs (max 50 per request) with intelligent concurrent processing and optimized caching.',
+            description: '[RECOMMENDED] Fetch additional details for supported models (Cards, Dashboards, Tables, Databases, Collections, Fields). Supports multiple IDs (max 50 per request) with intelligent concurrent processing and optimized caching.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -472,7 +472,7 @@ export class MetabaseServer {
       try {
         switch (request.params?.name) {
         case 'search':
-          return handleUnifiedSearch(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
+          return handleSearch(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
 
         case 'list_databases':
           return handleListDatabases(this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logError.bind(this));

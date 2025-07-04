@@ -4,7 +4,7 @@ import { MetabaseApiClient } from '../api.js';
 import { ErrorCode, McpError } from '../types/core.js';
 import { handleApiError } from '../utils.js';
 
-export async function handleUnifiedSearch(
+export async function handleSearch(
   request: z.infer<typeof CallToolRequestSchema>,
   requestId: string,
   apiClient: MetabaseApiClient,
@@ -25,7 +25,7 @@ export async function handleUnifiedSearch(
 
   // Updated validation: allow searching without query/id if database_id is provided
   if (!searchQuery && (!ids || ids.length === 0) && !databaseId) {
-    logWarn('Missing query, ids, or database_id parameter in unified search request', { requestId });
+    logWarn('Missing query, ids, or database_id parameter in search request', { requestId });
     throw new McpError(
       ErrorCode.InvalidParams,
       'Either search query, ids parameter, or database_id is required'
@@ -106,7 +106,25 @@ export async function handleUnifiedSearch(
     );
   }
 
-  logDebug(`Unified search with query: "${searchQuery}", models: ${models.join(', ')}`);
+  // Validate search_native_query - only allowed when searching cards exclusively
+  if (searchNativeQuery && (models.length !== 1 || models[0] !== 'card')) {
+    logWarn('search_native_query parameter can only be used when searching cards exclusively', { requestId });
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'search_native_query parameter can only be used when models=["card"] - it searches within SQL query content of cards'
+    );
+  }
+
+  // Validate include_dashboard_questions - only allowed when dashboard is in models
+  if (includeDashboardQuestions && !models.includes('dashboard')) {
+    logWarn('include_dashboard_questions parameter can only be used when dashboard model is included', { requestId });
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'include_dashboard_questions parameter can only be used when "dashboard" is included in the models array'
+    );
+  }
+
+  logDebug(`Search with query: "${searchQuery}", models: ${models.join(', ')}`);
 
   const searchStartTime = Date.now();
 
@@ -185,7 +203,7 @@ export async function handleUnifiedSearch(
     const searchMethod = ids && ids.length > 0 ? 'id_search' :
                        databaseId && !searchQuery ? 'database_search' : 'query_search';
 
-    logInfo(`Unified search found ${totalResults} items across ${Object.keys(resultsByModel).length} model types in ${searchTime}ms`);
+    logInfo(`Search found ${totalResults} items across ${Object.keys(resultsByModel).length} model types in ${searchTime}ms`);
 
     // Build standardized parameters object for response
     const usedParameters: any = {
@@ -202,7 +220,7 @@ export async function handleUnifiedSearch(
     if (databaseId) usedParameters.database_id = databaseId;
     if (verified === true) usedParameters.verified = verified;
 
-    // Generate unified recommended actions based on found models
+    // Generate recommended actions based on found models
     const foundModels = Object.keys(resultsByModel);
     const recommendedActions: { [key: string]: string } = {};
 
@@ -261,7 +279,7 @@ export async function handleUnifiedSearch(
     };
   } catch (error: any) {
     throw handleApiError(error, {
-      operation: 'Unified search',
+      operation: 'Search',
       resourceType: databaseId ? 'database' : undefined,
       resourceId: databaseId,
       customMessages: {
