@@ -4,8 +4,8 @@
 # Stage 1: Build
 FROM node:lts-alpine AS builder
 
-LABEL maintainer="Hyeongjun Yu <https://github.com/hyeongjun-dev>"
-LABEL description="Model Context Protocol server for Metabase integration"
+LABEL maintainer="Jericho Sequitin <https://github.com/jerichosequitin>"
+LABEL description="Model Context Protocol server for Metabase"
 LABEL version="0.1.0"
 
 # Set working directory

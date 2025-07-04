@@ -131,7 +131,10 @@ export async function handleExportQuery(
 
     // Validate that we have data before proceeding with file operations
     // For XLSX, check file size; for others, check row count
-    const hasData = format === 'xlsx' ? fileSize > 100 : rowCount != null && rowCount > 0;
+    const hasData =
+      format === 'xlsx'
+        ? fileSize > 100
+        : rowCount !== null && rowCount !== undefined && rowCount > 0;
     if (!hasData) {
       logWarn(`Query returned no data for export`, { requestId });
       return {

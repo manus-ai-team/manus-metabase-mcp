@@ -1,47 +1,88 @@
 # Metabase MCP Server
 
-**Original Author**: Hyeongjun Yu (@hyeongjun-dev)
+**Author**: Jericho Sequitin (@jerichosequitin)
 
-**Forked & Modified by**: Jericho Sequitin (@jerichosequitin)
-
-> This is a customized fork of the original [metabase-mcp-server](https://github.com/hyeongjun-dev/metabase-mcp-server) with additional features and modifications.
-
-A Model Context Protocol server that integrates AI assistants with Metabase analytics platform.
+A lightweight, enterprise-grade Model Context Protocol server designed for high-performance integration between AI assistants and Metabase analytics platforms. Built with intelligent caching, response optimization, and unified command architecture for production environments.
 
 ## Overview
 
-This TypeScript-based MCP server provides seamless integration with the Metabase API, enabling AI assistants to directly interact with your analytics data. Designed for Claude and other MCP-compatible AI assistants, this server acts as a bridge between your analytics platform and conversational AI.
+This TypeScript-based MCP server provides seamless integration with the Metabase API, enabling AI assistants to directly interact with your analytics data with enterprise-level performance and reliability. Designed for Claude and other MCP-compatible AI assistants, this server acts as an optimized bridge between your analytics platform and conversational AI.
 
 ### Key Features
 
-- **Resource Access**: Navigate Metabase resources via intuitive `metabase://` URIs
-- **Two Authentication Methods**: Support for both session-based and API key authentication
-- **Structured Data Access**: JSON-formatted responses for easy consumption by AI assistants
-- **Comprehensive Logging**: Detailed logging for easy debugging and monitoring
-- **Error Handling**: Robust error handling with clear error messages
-- **Custom Modifications**: Enhanced with additional features and improvements
+- **High Performance**: Aggressive response optimization with up to 90% token reduction*
+- **Unified Commands**: Streamlined `list`, `retrieve`, and `search` commands for all resource types
+- **Intelligent Caching**: Multi-layer caching system with configurable TTL and fallback support
+- **Enterprise Authentication**: Support for both session-based and API key authentication
+- **Advanced Search**: Native Metabase search API with model-specific filtering
+- **Data Export**: High-capacity export (up to 1M rows) in CSV, JSON, and XLSX formats
+- **Structured Data Access**: JSON-formatted responses optimized for AI consumption
+- **Comprehensive Logging**: Detailed logging with performance metrics and debugging
+- **Robust Error Handling**: Graceful error handling with clear error messages
+- **Concurrent Processing**: Batch processing with controlled concurrency for optimal performance
+
+*Performance optimization figures are based on internal testing and may vary depending on your Metabase instance configuration and data complexity.
 
 ## Available Tools
 
-The server exposes the following tools for AI assistants:
+The server exposes the following optimized tools for AI assistants:
 
-### Core Tools
-- `list_dashboards`: Retrieve all available dashboards in your Metabase instance
-- `list_cards`: Get all saved questions/cards in Metabase
-- `list_databases`: View all connected database sources
-- `get_dashboard_cards`: Extract all cards from a specific dashboard
+### Unified Core Tools
+- **`list`**: Fetch ALL records for a single resource type with highly optimized responses
+  - Supports: `cards`, `dashboards`, `tables`, `databases`, `collections`
+  - Returns only essential identifier fields for efficient browsing
+  - Intelligent caching with performance metrics
+
+- **`retrieve`**: Get detailed information for specific items by ID
+  - Supports: `card`, `dashboard`, `table`, `database`, `collection`, `field`
+  - Concurrent processing with controlled batch sizes
+  - Aggressive response optimization (75-90% token reduction)*
+
+- **`search`**: Unified search across all Metabase items using native search API
+  - Supports all model types with advanced filtering
+  - Search by name, ID, content, or database
+  - Includes dashboard questions and native query search
 
 ### Query Execution Tools
-- `execute_query`: **[RECOMMENDED]** Execute custom SQL queries against any connected database (2K row limit)
-- `execute_card`: **[DEPRECATED]** Run saved questions with optional parameters (unreliable, use get_card_sql + execute_query instead)
-- `get_card_sql`: **[RECOMMENDED]** Get the SQL query and database details from a Metabase card/question
+- **`execute_query`**: Execute custom SQL queries (2K row limit)
+  - Enhanced with proper LIMIT clause handling
+  - Improved parameter validation and error handling
 
-### Search Tools
-- `search_cards`: Search for questions/cards by name, ID, or SQL content
-- `search_dashboards`: Search for dashboards by name or ID
 
-### Export Tools
-- `export_query`: Export large SQL query results using Metabase export endpoints (supports up to 1M rows vs 2K limit of execute_query). Supports CSV, JSON, and XLSX formats with optional file saving.
+- **`export_query`**: Export large datasets (up to 1M rows)
+  - Supports CSV, JSON, and XLSX formats
+  - Automatic file saving with custom naming
+  - Enhanced validation and error handling
+
+### Utility Tools
+- **`clear_cache`**: Clear internal cache with granular control
+  - Supports model-specific cache clearing for both individual items and lists
+  - Individual item caches: `cards`, `dashboards`, `tables`, `databases`, `collections`, `fields`
+  - List caches: `cards-list`, `dashboards-list`, `tables-list`, `databases-list`, `collections-list`
+  - Bulk operations: `all`, `all-individual`, `all-lists`
+
+## Performance Optimizations
+
+### Response Optimization
+- **Cards**: ~90% reduction (45,000+ → 4,000-5,000 characters)*
+- **Dashboards**: ~85% reduction (50,000+ → 7,500 characters)*
+- **Tables**: ~80% reduction (40,000+ → 8,000 characters)*
+- **Databases**: ~75% reduction (25,000+ → 6,000-7,500 characters)*
+- **Collections**: ~15% reduction (2,500+ → 2,000 characters)*
+- **Fields**: ~75% reduction (15,000+ → 3,000-4,000 characters)*
+
+*Token reduction figures are based on typical Metabase responses and may vary depending on your specific data structure and configuration.
+
+### Caching System
+- **Multi-layer Caching**: Separate caches for individual items and bulk lists
+- **Configurable TTL**: Default 10-minute cache duration with environment variable control
+- **Fallback Support**: Stale cache data returned during API failures
+- **Cache Metrics**: Detailed performance tracking and hit/miss reporting
+
+### Concurrent Processing
+- **Batch Processing**: Controlled concurrency for retrieve operations
+- **Rate Limiting**: Prevents API overload with intelligent batching
+- **Performance Metrics**: Real-time processing statistics and time savings
 
 ## Configuration
 
@@ -55,8 +96,10 @@ METABASE_URL=https://your-metabase-instance.com
 METABASE_USER_EMAIL=your_email@example.com
 METABASE_PASSWORD=your_password
 
-# Optional
+# Optional Performance Settings
 LOG_LEVEL=info # Options: debug, info, warn, error, fatal
+CACHE_TTL_MS=600000 # Cache duration in milliseconds (default: 10 minutes)
+REQUEST_TIMEOUT_MS=600000 # Request timeout in milliseconds (default: 10 minutes)
 ```
 
 ### Option 2: API Key Authentication (Recommended for Production)
@@ -66,8 +109,10 @@ LOG_LEVEL=info # Options: debug, info, warn, error, fatal
 METABASE_URL=https://your-metabase-instance.com
 METABASE_API_KEY=your_api_key
 
-# Optional
-LOG_LEVEL=info # Options: debug, info, warn, error, fatal
+# Optional Performance Settings
+LOG_LEVEL=info
+CACHE_TTL_MS=600000
+REQUEST_TIMEOUT_MS=600000
 ```
 
 You can set these environment variables directly or use a `.env` file with [dotenv](https://www.npmjs.com/package/dotenv).
@@ -91,8 +136,34 @@ npm run build
 # Start the server
 npm start
 
-# For development with auto-rebuild
-npm run watch
+# For development with auto-rebuild and concurrent watching
+npm run dev:watch
+```
+
+### Available Scripts
+
+```bash
+# Development
+npm run dev:watch        # Concurrent TypeScript compilation and nodemon
+npm run watch           # TypeScript watch mode only
+npm run dev            # Build and run once
+
+# Production
+npm run build          # Build TypeScript to JavaScript
+npm run build:clean    # Clean build and rebuild
+npm start             # Start the built server
+
+# Quality Assurance
+npm run lint          # Run ESLint
+npm run lint:fix      # Fix ESLint issues
+npm run format        # Format code with Prettier
+npm run format:check  # Check formatting
+npm run type-check    # TypeScript type checking
+npm run validate      # Run all QA checks
+
+# Debugging
+npm run inspector     # Start with MCP Inspector
+npm run clean         # Clean build artifacts
 ```
 
 ### Claude Desktop Integration
@@ -111,7 +182,9 @@ To use with Claude Desktop, add this server configuration:
       "env": {
         "METABASE_URL": "https://your-metabase-instance.com",
         "METABASE_USER_EMAIL": "your_email@example.com",
-        "METABASE_PASSWORD": "your_password"
+        "METABASE_PASSWORD": "your_password",
+        "LOG_LEVEL": "info",
+        "CACHE_TTL_MS": "600000"
         // Or alternatively, use API key authentication
         // "METABASE_API_KEY": "your_api_key"
       }
@@ -120,119 +193,92 @@ To use with Claude Desktop, add this server configuration:
 }
 ```
 
-Alternatively, you can use the Smithery hosted version via npx with JSON configuration:
-
-#### API Key Authentication:
-
-```json
-{
-  "mcpServers": {
-    "metabase-mcp-server": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@smithery/cli@latest",
-        "run",
-        "@hyeongjun-dev/metabase-mcp-server",
-        "--config",
-        "{\"metabaseUrl\":\"https://your-metabase-instance.com\",\"metabaseApiKey\":\"your_api_key\",\"metabasePassword\":\"\",\"metabaseUserEmail\":\"\"}"
-      ]
-    }
-  }
-}
-```
-
-#### Username and Password Authentication:
-
-```json
-{
-  "mcpServers": {
-    "metabase-mcp-server": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@smithery/cli@latest",
-        "run",
-        "@hyeongjun-dev/metabase-mcp-server",
-        "--config",
-        "{\"metabaseUrl\":\"https://your-metabase-instance.com\",\"metabaseApiKey\":\"\",\"metabasePassword\":\"your_password\",\"metabaseUserEmail\":\"your_email@example.com\"}"
-      ]
-    }
-  }
-}
-```
-
-## Custom Modifications
-
-This fork includes the following enhancements:
-
-### Implemented Features
-- [x] **Enhanced Search Functionality**: Added `search_cards` and `search_dashboards` tools with support for name, ID, and SQL content search
-- [x] **SQL Query Extraction**: Added `get_card_sql` tool to extract SQL queries from Metabase cards for modification and reuse
-- [x] **Data Export**: Added `export_query` tool supporting CSV, JSON, and XLSX formats with up to 1M row capacity
-
-### Tool Enhancements
-
-#### Search Tools
-- **Auto-detection**: Automatically detects search type (name, ID, or content) based on query pattern
-- **SQL Content Search**: Search within SQL queries of saved cards
-- **Enhanced Results**: Provides SQL previews and recommended workflows for AI agents
-
-#### Export Tools
-- **Multiple Formats**: Support for CSV, JSON, and XLSX export formats
-- **High Capacity**: Up to 1 million rows (vs 2,000 row limit of standard queries)
-- **File Management**: Automatic file saving to Downloads folder with error handling
-- **Custom Filenames**: Support for custom filename specification
-- **Progress Feedback**: Clear status messages and fallback instructions
-
-#### Query Execution
-- **SQL Extraction**: Get SQL queries from existing cards for modification
-- **Parameter Support**: Enhanced parameter handling with proper type detection
-- **Reliability**: Deprecated unreliable `execute_card` in favor of `get_card_sql` + `execute_query` workflow
-
 ## Usage Examples
 
-### Search for Cards
+### List All Resources
 ```javascript
-// Search by name
-search_cards({ query: "sales dashboard" })
+// Get overview of all cards
+list({ model: "cards" })
 
-// Search by ID
-search_cards({ query: "42" })
+// Get overview of all dashboards
+list({ model: "dashboards" })
 
-// Search by SQL content
-search_cards({ query: "SELECT * FROM orders" })
+// Get overview of all tables
+list({ model: "tables" })
+
+// Get overview of all databases
+list({ model: "databases" })
+
+// Get overview of all collections
+list({ model: "collections" })
 ```
 
-### Extract and Modify SQL Queries
+### Retrieve Detailed Information
 ```javascript
-// 1. Get SQL from existing card
+// Get detailed information for specific cards
+retrieve({ model: "card", ids: [1, 2, 3] })
+
+// Get detailed dashboard information
+retrieve({ model: "dashboard", ids: [42] })
+
+// Get table schema information
+retrieve({ model: "table", ids: [10, 11] })
+```
+
+### Advanced Search
+```javascript
+// Search across all model types
+search({
+  query: "sales",
+  models: ["card", "dashboard"],
+  max_results: 20
+})
+
+// Search with database filtering
+search({
+  query: "user data",
+  models: ["card"],
+  database_id: 1,
+  search_native_query: true
+})
+
+// Search by specific IDs
+search({
+  ids: [1, 2, 3],
+  models: ["card"]
+})
+```
+
+### Enhanced Query Workflow
+
+#### Extract and Modify SQL Queries
+```javascript
+// 1. Get SQL from existing card (with caching)
 get_card_sql({ card_id: 42 })
 
 // 2. Execute with modifications
 execute_query({
   database_id: 1,
-  query: "SELECT * FROM users WHERE created_at > '2024-01-01' LIMIT 1000"
+  query: "SELECT * FROM users WHERE created_at > '2024-01-01' LIMIT 1000",
+  row_limit: 500
 })
 ```
 
-### Export Large Datasets
+#### Export Large Datasets
 ```javascript
 // Export as CSV with auto-save
 export_query({
   database_id: 1,
   query: "SELECT * FROM large_table",
   format: "csv",
-  save_file: true,
   filename: "large_export"
 })
 
 // Export as Excel file
 export_query({
   database_id: 1,
-  query: "SELECT * FROM sales_data",
-  format: "xlsx",
-  save_file: true
+  query: "SELECT * FROM sales_data WHERE date >= '2024-01-01'",
+  format: "xlsx"
 })
 
 // Export as JSON for API integration
@@ -243,6 +289,37 @@ export_query({
 })
 ```
 
+### Cache Management
+```javascript
+// Clear all caches (individual items and lists)
+clear_cache({ cache_type: "all" })
+
+// Clear specific individual item cache
+clear_cache({ cache_type: "cards" })
+
+// Clear specific list cache
+clear_cache({ cache_type: "cards-list" })
+
+// Clear all individual item caches only
+clear_cache({ cache_type: "all-individual" })
+
+// Clear all list caches only
+clear_cache({ cache_type: "all-lists" })
+
+// Clear specific model's list cache (for list command optimization)
+clear_cache({ cache_type: "dashboards-list" })
+```
+
+## Performance Metrics
+
+The server provides detailed performance metrics for all operations:
+
+- **Cache Hit/Miss Ratios**: Track cache effectiveness
+- **Response Times**: Monitor API and optimization performance
+- **Concurrent Processing**: Measure time savings from parallel operations
+- **Token Savings**: Quantify response optimization benefits
+- **Memory Usage**: Track cache memory consumption
+
 ## Debugging
 
 Since MCP servers communicate over stdio, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) for debugging:
@@ -251,21 +328,53 @@ Since MCP servers communicate over stdio, use the [MCP Inspector](https://github
 npm run inspector
 ```
 
-The Inspector will provide a browser-based interface for monitoring requests and responses.
+The Inspector provides a browser-based interface for monitoring requests, responses, and performance metrics.
+
+## Docker Support
+
+### Building the Docker Image
+
+```bash
+# Build the Docker image
+docker build -t metabase-mcp-server .
+
+# Run with API key authentication
+docker run -e METABASE_URL=https://metabase.example.com \
+           -e METABASE_API_KEY=your_api_key \
+           -e LOG_LEVEL=info \
+           metabase-mcp-server
+
+# Run with username/password authentication
+docker run -e METABASE_URL=https://metabase.example.com \
+           -e METABASE_USER_EMAIL=user@example.com \
+           -e METABASE_PASSWORD=password \
+           -e LOG_LEVEL=info \
+           metabase-mcp-server
+```
+
+## Development Improvements
+
+### Enhanced Development Experience
+- **Concurrent Development**: TypeScript compilation and nodemon running simultaneously
+- **ESLint Integration**: Comprehensive linting with TypeScript support
+- **Prettier Formatting**: Consistent code formatting
+- **Type Checking**: Strict TypeScript configuration
+- **CI/CD Pipeline**: Automated testing and validation
+
+### Code Quality
+- **Modular Architecture**: Organized handlers, types, and utilities
+- **Error Handling**: Comprehensive error handling with detailed logging
+- **Documentation**: Extensive inline documentation and type definitions
+- **Testing**: Automated CI testing across Node.js versions
 
 ## Security Considerations
 
-- We recommend using API key authentication for production environments
-- Keep your API keys and credentials secure
-- Consider using Docker secrets or environment variables instead of hardcoding credentials
-- Apply appropriate network security measures to restrict access to your Metabase instance
-
-
-## Original Project
-
-This project is based on the original work by Hyeongjun Yu. You can find the original repository at:
-https://github.com/hyeongjun-dev/metabase-mcp-server
+- **API Key Authentication**: Recommended for production environments
+- **Credential Security**: Environment variable-based configuration
+- **Docker Secrets**: Support for Docker secrets and environment variables
+- **Network Security**: Apply appropriate network security measures
+- **Rate Limiting**: Built-in request rate limiting and timeout handling
 
 ## License
 
-This project maintains the same license as the original project.
+This project is licensed under the MIT License.

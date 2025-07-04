@@ -581,6 +581,34 @@ export class MetabaseApiClient {
   }
 
   /**
+   * Clear individual list cache methods
+   */
+  clearCardsListCache(): void {
+    this.listCardsCache = null;
+    this.logDebug('Cards list cache cleared');
+  }
+
+  clearDashboardsListCache(): void {
+    this.listDashboardsCache = null;
+    this.logDebug('Dashboards list cache cleared');
+  }
+
+  clearTablesListCache(): void {
+    this.listTablesCache = null;
+    this.logDebug('Tables list cache cleared');
+  }
+
+  clearDatabasesListCache(): void {
+    this.listDatabasesCache = null;
+    this.logDebug('Databases list cache cleared');
+  }
+
+  clearCollectionsListCache(): void {
+    this.listCollectionsCache = null;
+    this.logDebug('Collections list cache cleared');
+  }
+
+  /**
    * Clear all caches (individual items and lists)
    */
   clearAllCache(): void {

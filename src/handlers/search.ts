@@ -235,13 +235,24 @@ export async function handleSearch(
     };
 
     // Add optional parameters that were actually used
-    if (searchNativeQuery) usedParameters.search_native_query = searchNativeQuery;
-    if (includeDashboardQuestions)
+    if (searchNativeQuery) {
+      usedParameters.search_native_query = searchNativeQuery;
+    }
+    if (includeDashboardQuestions) {
       usedParameters.include_dashboard_questions = includeDashboardQuestions;
-    if (ids && ids.length > 0) usedParameters.ids = ids;
-    if (archived === true) usedParameters.archived = archived;
-    if (databaseId) usedParameters.database_id = databaseId;
-    if (verified === true) usedParameters.verified = verified;
+    }
+    if (ids && ids.length > 0) {
+      usedParameters.ids = ids;
+    }
+    if (archived === true) {
+      usedParameters.archived = archived;
+    }
+    if (databaseId) {
+      usedParameters.database_id = databaseId;
+    }
+    if (verified === true) {
+      usedParameters.verified = verified;
+    }
 
     // Generate recommended actions based on found models
     const foundModels = Object.keys(resultsByModel);

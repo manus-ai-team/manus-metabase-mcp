@@ -476,11 +476,17 @@ export function generateFlattenedFields(obj: any, prefix = '', result: string[] 
  * Removes actual values and shows only the data structure/types
  */
 export function generateTypeStructure(obj: any): any {
-  if (obj === null) return 'null';
-  if (obj === undefined) return 'undefined';
+  if (obj === null) {
+    return 'null';
+  }
+  if (obj === undefined) {
+    return 'undefined';
+  }
 
   if (Array.isArray(obj)) {
-    if (obj.length === 0) return 'array (empty)';
+    if (obj.length === 0) {
+      return 'array (empty)';
+    }
     return [generateTypeStructure(obj[0])];
   }
 
@@ -515,7 +521,9 @@ export function generateTypeStructure(obj: any): any {
  * Used to maintain field references for optimization decisions
  */
 export function saveRawStructure(model: string, rawData: any, enableSave: boolean = false): void {
-  if (!enableSave) return;
+  if (!enableSave) {
+    return;
+  }
 
   try {
     const docsDir = path.join(process.cwd(), 'docs', 'reference-responses');
@@ -546,8 +554,8 @@ export function saveRawStructure(model: string, rawData: any, enableSave: boolea
     }
 
     fs.writeFileSync(filePath, JSON.stringify(referenceDoc, null, 2));
-    console.log(`Saved raw structure for ${model} to ${filePath}`);
+    // Debug: Saved raw structure for analysis
   } catch (error) {
-    console.warn(`Failed to save raw structure for ${model}:`, error);
+    // Debug: Failed to save raw structure
   }
 }

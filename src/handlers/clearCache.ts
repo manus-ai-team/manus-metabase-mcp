@@ -22,6 +22,13 @@ export function handleClearCache(
     'databases',
     'collections',
     'fields',
+    'cards-list',
+    'dashboards-list',
+    'tables-list',
+    'databases-list',
+    'collections-list',
+    'all-lists',
+    'all-individual',
   ];
   if (!validCacheTypes.includes(cacheType)) {
     logWarn(`Invalid cache_type parameter: ${cacheType}`, { validTypes: validCacheTypes });
@@ -38,31 +45,31 @@ export function handleClearCache(
     switch (cacheType) {
       case 'cards':
         apiClient.clearCardsCache();
-        message = 'Cards cache cleared successfully';
+        message = 'Cards cache cleared successfully (individual items only)';
         cacheStatus = 'cards_cache_empty';
         break;
 
       case 'dashboards':
         apiClient.clearDashboardsCache();
-        message = 'Dashboards cache cleared successfully';
+        message = 'Dashboards cache cleared successfully (individual items only)';
         cacheStatus = 'dashboards_cache_empty';
         break;
 
       case 'tables':
         apiClient.clearTablesCache();
-        message = 'Tables cache cleared successfully';
+        message = 'Tables cache cleared successfully (individual items only)';
         cacheStatus = 'tables_cache_empty';
         break;
 
       case 'databases':
         apiClient.clearDatabasesCache();
-        message = 'Databases cache cleared successfully';
+        message = 'Databases cache cleared successfully (individual items only)';
         cacheStatus = 'databases_cache_empty';
         break;
 
       case 'collections':
         apiClient.clearCollectionsCache();
-        message = 'Collections cache cleared successfully';
+        message = 'Collections cache cleared successfully (individual items only)';
         cacheStatus = 'collections_cache_empty';
         break;
 
@@ -70,6 +77,55 @@ export function handleClearCache(
         apiClient.clearFieldsCache();
         message = 'Fields cache cleared successfully';
         cacheStatus = 'fields_cache_empty';
+        break;
+
+      case 'cards-list':
+        apiClient.clearCardsListCache();
+        message = 'Cards list cache cleared successfully';
+        cacheStatus = 'cards_list_cache_empty';
+        break;
+
+      case 'dashboards-list':
+        apiClient.clearDashboardsListCache();
+        message = 'Dashboards list cache cleared successfully';
+        cacheStatus = 'dashboards_list_cache_empty';
+        break;
+
+      case 'tables-list':
+        apiClient.clearTablesListCache();
+        message = 'Tables list cache cleared successfully';
+        cacheStatus = 'tables_list_cache_empty';
+        break;
+
+      case 'databases-list':
+        apiClient.clearDatabasesListCache();
+        message = 'Databases list cache cleared successfully';
+        cacheStatus = 'databases_list_cache_empty';
+        break;
+
+      case 'collections-list':
+        apiClient.clearCollectionsListCache();
+        message = 'Collections list cache cleared successfully';
+        cacheStatus = 'collections_list_cache_empty';
+        break;
+
+      case 'all-lists':
+        apiClient.clearListCaches();
+        message =
+          'All list caches cleared successfully (cards, dashboards, tables, databases, collections)';
+        cacheStatus = 'all_list_caches_empty';
+        break;
+
+      case 'all-individual':
+        apiClient.clearCardsCache();
+        apiClient.clearDashboardsCache();
+        apiClient.clearTablesCache();
+        apiClient.clearDatabasesCache();
+        apiClient.clearCollectionsCache();
+        apiClient.clearFieldsCache();
+        message =
+          'All individual item caches cleared successfully (cards, dashboards, tables, databases, collections, fields)';
+        cacheStatus = 'all_individual_caches_empty';
         break;
 
       case 'all':
@@ -95,7 +151,13 @@ export function handleClearCache(
               next_fetch_will_be: 'fresh from API',
               cache_info: {
                 cache_explanation:
-                  'Unified cache serves both individual card requests and bulk operations efficiently',
+                  'Unified cache system with separate individual item and list caches for optimal performance',
+                cache_types: {
+                  individual:
+                    'Cache for specific items accessed by ID (cards, dashboards, tables, databases, collections, fields)',
+                  lists:
+                    'Cache for bulk list operations (cards-list, dashboards-list, tables-list, databases-list, collections-list)',
+                },
               },
             },
             null,

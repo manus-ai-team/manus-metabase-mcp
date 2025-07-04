@@ -58,41 +58,46 @@ export async function handleList(
     let fetchTime: number;
 
     switch (model as SupportedListModel) {
-      case 'cards':
+      case 'cards': {
         optimizeFunction = optimizeCardForList;
         const cardsResponse = await apiClient.getCardsList();
         apiResponse = cardsResponse.data;
         dataSource = cardsResponse.source;
         fetchTime = cardsResponse.fetchTime;
         break;
-      case 'dashboards':
+      }
+      case 'dashboards': {
         optimizeFunction = optimizeDashboardForList;
         const dashboardsResponse = await apiClient.getDashboardsList();
         apiResponse = dashboardsResponse.data;
         dataSource = dashboardsResponse.source;
         fetchTime = dashboardsResponse.fetchTime;
         break;
-      case 'tables':
+      }
+      case 'tables': {
         optimizeFunction = optimizeTableForList;
         const tablesResponse = await apiClient.getTablesList();
         apiResponse = tablesResponse.data;
         dataSource = tablesResponse.source;
         fetchTime = tablesResponse.fetchTime;
         break;
-      case 'databases':
+      }
+      case 'databases': {
         optimizeFunction = optimizeDatabaseForList;
         const databasesResponse = await apiClient.getDatabasesList();
         apiResponse = databasesResponse.data;
         dataSource = databasesResponse.source;
         fetchTime = databasesResponse.fetchTime;
         break;
-      case 'collections':
+      }
+      case 'collections': {
         optimizeFunction = optimizeCollectionForList;
         const collectionsResponse = await apiClient.getCollectionsList();
         apiResponse = collectionsResponse.data;
         dataSource = collectionsResponse.source;
         fetchTime = collectionsResponse.fetchTime;
         break;
+      }
       default:
         throw new Error(`Unsupported model: ${model}`);
     }

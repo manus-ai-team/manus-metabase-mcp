@@ -31,7 +31,7 @@ export class MetabaseServer {
   constructor() {
     this.server = new Server(
       {
-        name: 'metabase-mcp-server',
+        name: 'metabase-mcp',
         version: '0.1.0',
       },
       {
@@ -217,10 +217,8 @@ export class MetabaseServer {
               },
             ],
           };
-        }
-
-        // Handle question/card resource
-        else if ((match = uri.match(/^metabase:\/\/card\/(\d+)$/))) {
+        } else if ((match = uri.match(/^metabase:\/\/card\/(\d+)$/))) {
+          // Handle question/card resource
           const cardId = parseInt(match[1], 10);
           this.logDebug(`Fetching card/question with ID: ${cardId}`);
 
@@ -238,10 +236,8 @@ export class MetabaseServer {
               },
             ],
           };
-        }
-
-        // Handle database resource
-        else if ((match = uri.match(/^metabase:\/\/database\/(\d+)$/))) {
+        } else if ((match = uri.match(/^metabase:\/\/database\/(\d+)$/))) {
+          // Handle database resource
           const databaseId = parseInt(match[1], 10);
           this.logDebug(`Fetching database with ID: ${databaseId}`);
 
@@ -474,7 +470,7 @@ export class MetabaseServer {
           {
             name: 'clear_cache',
             description:
-              '[UTILITY] Clear the internal cache for stored data. Useful for debugging or when you know the data has changed. Supports model-based cache clearing.',
+              '[UTILITY] Clear the internal cache for stored data. Useful for debugging or when you know the data has changed. Supports granular cache clearing for both individual items and list caches.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -488,9 +484,16 @@ export class MetabaseServer {
                     'databases',
                     'collections',
                     'fields',
+                    'cards-list',
+                    'dashboards-list',
+                    'tables-list',
+                    'databases-list',
+                    'collections-list',
+                    'all-lists',
+                    'all-individual',
                   ],
                   description:
-                    'Type of cache to clear: "all" (default - clears all cache types), "cards" (cards only), "dashboards" (dashboards only), "tables" (tables only), "databases" (databases only), "collections" (collections only), or "fields" (fields only)',
+                    'Type of cache to clear: "all" (default - clears all cache types), individual item caches ("cards", "dashboards", "tables", "databases", "collections", "fields"), list caches ("cards-list", "dashboards-list", "tables-list", "databases-list", "collections-list"), or bulk operations ("all-lists", "all-individual")',
                   default: 'all',
                 },
               },
