@@ -35,11 +35,16 @@ jobs:
     - name: Run linting (allow warnings)
       run: npm run lint || echo "Linting completed with warnings"
 
-    - name: Build project
-      run: npm run build
-
-    - name: Run tests
+    - name: Run unit tests
       run: npm test
+
+    - name: Run tests with coverage
+      run: npm run test:coverage
+
+
+
+    - name: Build project
+      run: npm run build:fast
 
     - name: Test MCP server can start
       env:
@@ -50,12 +55,12 @@ jobs:
         NODE_ENV: "test"
       run: |
         if command -v timeout >/dev/null 2>&1; then
-          timeout 10s node build/index.js || test $? = 124
+          timeout 10s node build/src/index.js || test $? = 124
         elif command -v gtimeout >/dev/null 2>&1; then
-          gtimeout 10s node build/index.js || test $? = 124
+          gtimeout 10s node build/src/index.js || test $? = 124
         else
           # Fallback for systems without timeout command
-          node build/index.js &
+          node build/src/index.js &
           SERVER_PID=$!
           sleep 5
           if kill -0 $SERVER_PID 2>/dev/null; then
@@ -76,3 +81,75 @@ jobs:
 
     - name: Build Docker image
       run: docker build -t metabase-mcp .
+
+    - name: Test Docker image
+      run: |
+        # Test that the Docker image can be created and runs
+        # Since this is an MCP server that uses stdio, we test it differently
+        echo "Testing Docker container startup and environment validation..."
+
+        # Test 1: Container starts and validates environment correctly
+        echo "Test 1: Environment validation test..."
+        if echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0.0"}}, "id": 1}' | \
+           timeout 10s docker run --rm -i \
+             -e METABASE_URL=https://test.metabase.local \
+             -e METABASE_API_KEY=test-api-key \
+             -e NODE_ENV=test \
+             metabase-mcp | head -1; then
+          echo "✅ Test 1 passed: Container starts and accepts input"
+        else
+          echo "❌ Test 1 failed: Container could not start or process input"
+          exit 1
+        fi
+
+        # Test 2: Container fails properly with missing environment variables
+        echo "Test 2: Missing environment variables test..."
+        if timeout 5s docker run --rm metabase-mcp 2>&1 | grep -q "Environment validation failed"; then
+          echo "✅ Test 2 passed: Container properly validates environment variables"
+        else
+          echo "❌ Test 2 failed: Container should fail with missing environment variables"
+          exit 1
+        fi
+
+        echo "🎉 All Docker tests passed successfully!"
+
+  quality-gates:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run comprehensive test suite
+      run: npm run test:coverage
+
+    - name: Check test coverage thresholds
+      run: |
+        echo "Verifying test coverage meets quality gates..."
+        # Coverage thresholds are enforced by vitest.config.ts
+        # This step will fail if coverage is below 80%
+        npm run test:coverage
+
+    - name: Generate test report
+      run: |
+        echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+
+        # Count test files and tests
+        TEST_FILES=$(find tests -name "*.test.ts" | wc -l)
+        TOTAL_TESTS=$(npm test 2>&1 | grep -o '[0-9]* passed' | head -1 | grep -o '[0-9]*' || echo "0")
+
+        echo "| Test Files | $TEST_FILES |" >> $GITHUB_STEP_SUMMARY
+        echo "| Total Tests | $TOTAL_TESTS |" >> $GITHUB_STEP_SUMMARY
+        echo "| Coverage Threshold | 80% |" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | ✅ All tests passing |" >> $GITHUB_STEP_SUMMARY

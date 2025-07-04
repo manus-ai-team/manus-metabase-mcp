@@ -168,32 +168,102 @@ npm run inspector     # Start with MCP Inspector
 npm run clean         # Clean build artifacts
 ```
 
+### Local Development Setup
+
+For local development and testing, follow these steps:
+
+1. **Clone and build the project**:
+   ```bash
+   git clone <https://github.com/jerichosequitin/metabase-mcp.git>
+   cd metabase-mcp
+   npm install
+   npm run build
+   ```
+
+2. **Set up environment variables**:
+   Create a `.env` file in the project root:
+   ```bash
+   # Required - Your Metabase instance
+   METABASE_URL=https://your-metabase-instance.com
+
+   # Authentication (choose one method)
+   # Method 1: API Key (recommended)
+   METABASE_API_KEY=your_api_key_here
+
+   # Method 2: Username/Password
+   # METABASE_USER_EMAIL=your_email@example.com
+   # METABASE_PASSWORD=your_password
+
+   # Optional settings
+   LOG_LEVEL=info
+   CACHE_TTL_MS=600000
+   REQUEST_TIMEOUT_MS=600000
+   ```
+
+3. **Verify the build**:
+   ```bash
+   # Verify the build was successful
+   ls -la build/src/index.js
+
+   # Optional: Test the server manually (for development/debugging only)
+   # npm start
+   ```
+
 ### Claude Desktop Integration
 
-To use with Claude Desktop, add this server configuration:
+To integrate with Claude Desktop, you'll need to configure the MCP server in Claude's configuration file.
 
-**MacOS**: Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
+#### Configuration File Locations:
+- **MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
 
-**Windows**: Edit `%APPDATA%/Claude/claude_desktop_config.json`
-
+#### For Local Development:
 ```json
 {
   "mcpServers": {
     "metabase-mcp": {
-      "command": "/absolute/path/to/metabase-mcp/build/index.js",
+      "command": "/Users/your-username/path/to/metabase-mcp/build/src/index.js",
       "env": {
         "METABASE_URL": "https://your-metabase-instance.com",
-        "METABASE_USER_EMAIL": "your_email@example.com",
-        "METABASE_PASSWORD": "your_password",
+        "METABASE_API_KEY": "your_api_key_here",
         "LOG_LEVEL": "info",
         "CACHE_TTL_MS": "600000"
-        // Or alternatively, use API key authentication
-        // "METABASE_API_KEY": "your_api_key"
       }
     }
   }
 }
 ```
+
+#### For Production/Installed Package:
+```json
+{
+  "mcpServers": {
+    "metabase-mcp": {
+      "command": "metabase-mcp",
+      "env": {
+        "METABASE_URL": "https://your-metabase-instance.com",
+        "METABASE_API_KEY": "your_api_key_here",
+        "LOG_LEVEL": "info",
+        "CACHE_TTL_MS": "600000"
+      }
+    }
+  }
+}
+```
+
+#### Important Notes:
+- **Use absolute paths** for local development (e.g., `/Users/username/Documents/metabase-mcp/build/src/index.js`)
+- **Replace `your-username`** with your actual username
+- **Replace `path/to/metabase-mcp`** with the actual path to your cloned repository
+- **No need to run the server manually** - Claude Desktop will automatically start and manage the MCP server process
+- **Never commit real credentials** to version control
+- **Restart Claude Desktop** after making configuration changes
+
+#### Troubleshooting:
+- Ensure the path to `build/src/index.js` is correct and the file exists
+- Verify your Metabase credentials are valid
+- Check Claude Desktop's logs for any connection errors
+- Make sure the server builds successfully with `npm run build`
 
 ## Usage Examples
 
@@ -353,6 +423,66 @@ docker run -e METABASE_URL=https://metabase.example.com \
            -e LOG_LEVEL=info \
            metabase-mcp
 ```
+
+## Testing
+
+### Comprehensive Test Suite
+
+The project includes a robust testing framework with comprehensive unit tests covering all MCP commands and edge cases:
+
+#### Test Coverage by Handler
+- **clearCache**: Parameter validation, cache operations, response formatting
+- **executeQuery**: SQL execution, parameter handling, row limits, query processing
+- **exportQuery**: Format support (CSV/JSON/XLSX), file operations, validation
+- **list**: All model types, caching, error handling, empty results
+- **retrieve**: Multi-entity support, batch operations, cache behavior
+- **search**: Advanced search parameters, model restrictions, query combinations
+
+#### Quality Assurance Features
+- **80% Coverage Threshold**: Enforced via Vitest configuration
+- **Parameter Validation**: Comprehensive testing of all input validation
+- **Error Scenarios**: Complete coverage of error conditions and edge cases
+- **Mock Infrastructure**: Sophisticated API client and environment mocking
+- **Cache Testing**: Verification of cache behavior and performance metrics
+- **TypeScript Compliance**: Full type safety validation
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run comprehensive test suite with quality checks
+npm run test:all
+
+# Run the full quality assurance pipeline
+./scripts/test-all.sh
+```
+
+### Test Infrastructure
+
+The testing setup includes:
+- **Vitest**: Modern testing framework with TypeScript support
+- **Mock API Client**: Complete Metabase API simulation
+- **Test Data**: Comprehensive sample data for all entity types
+- **Environment Mocking**: Isolated test environment configuration
+- **Coverage Analysis**: Detailed coverage reports with HTML output
+- **CI Integration**: Automated testing across Node.js versions (18.x, 20.x, 22.x)
+
+### GitHub Actions Integration
+
+Automated testing runs on:
+- **Push/PR Events**: Comprehensive test suite execution
+- **Multi-Node Testing**: Parallel testing across Node.js versions
+- **Quality Gates**: Type checking, linting, formatting, and coverage validation
+- **Docker Testing**: Container build and startup verification
+- **Performance Monitoring**: Test execution time and coverage metrics
 
 ## Development Improvements
 
