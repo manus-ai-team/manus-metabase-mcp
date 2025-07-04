@@ -7,7 +7,7 @@ import {
   SupportedModel,
   MAX_IDS_PER_REQUEST,
   CONCURRENCY_LIMITS,
-  SAVE_RAW_STRUCTURES
+  SAVE_RAW_STRUCTURES,
 } from './types.js';
 import {
   optimizeCardResponse,
@@ -15,7 +15,7 @@ import {
   optimizeTableResponse,
   optimizeDatabaseResponse,
   optimizeCollectionResponse,
-  optimizeFieldResponse
+  optimizeFieldResponse,
 } from './optimizers.js';
 
 export async function handleRetrieve(
@@ -48,7 +48,9 @@ export async function handleRetrieve(
 
   // Validate maximum number of IDs to prevent abuse and ensure reasonable response times
   if (ids.length > MAX_IDS_PER_REQUEST) {
-    logWarn(`Too many IDs requested: ${ids.length}. Maximum allowed: ${MAX_IDS_PER_REQUEST}`, { requestId });
+    logWarn(`Too many IDs requested: ${ids.length}. Maximum allowed: ${MAX_IDS_PER_REQUEST}`, {
+      requestId,
+    });
     throw new McpError(
       ErrorCode.InvalidParams,
       `Too many IDs requested. Maximum allowed: ${MAX_IDS_PER_REQUEST} per request. For larger datasets, please make multiple requests.`
@@ -56,7 +58,14 @@ export async function handleRetrieve(
   }
 
   // Validate model type
-  const supportedModels: SupportedModel[] = ['card', 'dashboard', 'table', 'database', 'collection', 'field'];
+  const supportedModels: SupportedModel[] = [
+    'card',
+    'dashboard',
+    'table',
+    'database',
+    'collection',
+    'field',
+  ];
   if (!supportedModels.includes(model as SupportedModel)) {
     logWarn(`Invalid model type: ${model}`, { requestId });
     throw new McpError(
@@ -91,11 +100,16 @@ export async function handleRetrieve(
     // - Small requests (≤3): Full concurrency for minimal latency
     // - Medium requests (4-20): Moderate batching for balanced performance
     // - Large requests (21-50): Conservative batching to prevent server overload
-    const CONCURRENT_LIMIT = numericIds.length <= CONCURRENCY_LIMITS.SMALL_REQUEST_THRESHOLD ? numericIds.length :
-                           numericIds.length <= CONCURRENCY_LIMITS.MEDIUM_REQUEST_THRESHOLD ? CONCURRENCY_LIMITS.MEDIUM_BATCH_SIZE :
-                           CONCURRENCY_LIMITS.LARGE_BATCH_SIZE;
+    const CONCURRENT_LIMIT =
+      numericIds.length <= CONCURRENCY_LIMITS.SMALL_REQUEST_THRESHOLD
+        ? numericIds.length
+        : numericIds.length <= CONCURRENCY_LIMITS.MEDIUM_REQUEST_THRESHOLD
+          ? CONCURRENCY_LIMITS.MEDIUM_BATCH_SIZE
+          : CONCURRENCY_LIMITS.LARGE_BATCH_SIZE;
 
-    logDebug(`Processing ${numericIds.length} ${model}(s) with concurrency limit: ${CONCURRENT_LIMIT}`);
+    logDebug(
+      `Processing ${numericIds.length} ${model}(s) with concurrency limit: ${CONCURRENT_LIMIT}`
+    );
 
     // Process requests concurrently with controlled concurrency to balance performance and server load
     const processId = async (id: number) => {
@@ -139,38 +153,38 @@ export async function handleRetrieve(
         if (model === 'card') {
           result = optimizeCardResponse({
             id,
-            ...response.data
+            ...response.data,
           });
         } else if (model === 'dashboard') {
           result = optimizeDashboardResponse({
             id,
-            ...response.data
+            ...response.data,
           });
         } else if (model === 'table') {
           result = optimizeTableResponse({
             id,
-            ...response.data
+            ...response.data,
           });
         } else if (model === 'database') {
           result = optimizeDatabaseResponse({
             id,
-            ...response.data
+            ...response.data,
           });
         } else if (model === 'collection') {
           result = optimizeCollectionResponse({
             id,
-            ...response.data
+            ...response.data,
           });
         } else if (model === 'field') {
           result = optimizeFieldResponse({
             id,
-            ...response.data
+            ...response.data,
           });
         } else {
           result = {
             id,
             ...response.data,
-            retrieved_at: new Date().toISOString()
+            retrieved_at: new Date().toISOString(),
           };
         }
 
@@ -198,7 +212,7 @@ export async function handleRetrieve(
     for (const batch of batches) {
       const batchResults = await processBatch(batch);
 
-      batchResults.forEach((result) => {
+      batchResults.forEach(result => {
         if (result.status === 'fulfilled') {
           const { success, id, result: itemResult, error } = result.value;
           if (success) {
@@ -222,14 +236,17 @@ export async function handleRetrieve(
       cache_hits: cacheHits,
       api_calls: apiHits,
       total_successful: successCount,
-      primary_source: cacheHits > apiHits ? 'cache' : apiHits > cacheHits ? 'api' : 'mixed'
+      primary_source: cacheHits > apiHits ? 'cache' : apiHits > cacheHits ? 'api' : 'mixed',
     };
 
     // Calculate performance metrics
     const averageTimePerItem = Math.round(totalTime / numericIds.length);
     const concurrencyUsed = Math.min(CONCURRENT_LIMIT, numericIds.length);
     const estimatedSequentialTime = averageTimePerItem * numericIds.length;
-    const timesSaved = numericIds.length > 1 ? Math.round(((estimatedSequentialTime - totalTime) / estimatedSequentialTime) * 100) : 0;
+    const timesSaved =
+      numericIds.length > 1
+        ? Math.round(((estimatedSequentialTime - totalTime) / estimatedSequentialTime) * 100)
+        : 0;
 
     // Create response object
     const response: any = {
@@ -245,7 +262,7 @@ export async function handleRetrieve(
         concurrency_used: concurrencyUsed,
       },
       retrieved_at: new Date().toISOString(),
-      results: results
+      results: results,
     };
 
     // Add errors if any occurred
@@ -268,48 +285,60 @@ export async function handleRetrieve(
     // Add usage guidance based on model type
     switch (model as SupportedModel) {
       case 'card':
-        response.usage_guidance = 'Use the database_id and dataset_query.native.query with execute_query to run queries. You can modify the SQL as needed. Response is optimized to include only essential fields for better performance.';
+        response.usage_guidance =
+          'Use the database_id and dataset_query.native.query with execute_query to run queries. You can modify the SQL as needed. Response is optimized to include only essential fields for better performance.';
         break;
       case 'dashboard':
-        response.usage_guidance = 'Dashboard data includes optimized layout, cards, and parameters. Use retrieve or execute_query with card database_id and dataset_query.native.query from dashcards[].card to run queries. Response is optimized to exclude heavy metadata for better performance.';
+        response.usage_guidance =
+          'Dashboard data includes optimized layout, cards, and parameters. Use retrieve or execute_query with card database_id and dataset_query.native.query from dashcards[].card to run queries. Response is optimized to exclude heavy metadata for better performance.';
         break;
       case 'table':
-        response.usage_guidance = 'Table metadata includes optimized column information, data types, and relationships. Use fields[] array to understand table schema and construct queries. Response excludes heavy fingerprint statistics for better performance.';
+        response.usage_guidance =
+          'Table metadata includes optimized column information, data types, and relationships. Use fields[] array to understand table schema and construct queries. Response excludes heavy fingerprint statistics for better performance.';
         break;
       case 'database':
-        response.usage_guidance = 'Database details include optimized connection info and available tables. Use tables[] array to see all tables, then retrieve with model="table" for detailed table metadata. Response excludes features array for better performance.';
+        response.usage_guidance =
+          'Database details include optimized connection info and available tables. Use tables[] array to see all tables, then retrieve with model="table" for detailed table metadata. Response excludes features array for better performance.';
         break;
       case 'collection':
-        response.usage_guidance = 'Collection details include organizational structure and metadata for managing questions, dashboards, models, and other Metabase content. Collections work like folders to organize your Metabase items. Response is lightly optimized to remove archive metadata.';
+        response.usage_guidance =
+          'Collection details include organizational structure and metadata for managing questions, dashboards, models, and other Metabase content. Collections work like folders to organize your Metabase items. Response is lightly optimized to remove archive metadata.';
         break;
       case 'field':
-        response.usage_guidance = 'Field metadata includes data type, constraints, and relationships. Use this information when constructing queries or understanding table structure. Response is heavily optimized to exclude nested database features and detailed fingerprint data for better performance.';
+        response.usage_guidance =
+          'Field metadata includes data type, constraints, and relationships. Use this information when constructing queries or understanding table structure. Response is heavily optimized to exclude nested database features and detailed fingerprint data for better performance.';
         break;
     }
 
-    const logMessage = errorCount > 0
-      ? `Retrieved ${successCount}/${numericIds.length} ${model}s (${errorCount} errors, source: ${dataSource.primary_source})`
-      : `Successfully retrieved ${successCount} ${model}s (source: ${dataSource.primary_source})`;
+    const logMessage =
+      errorCount > 0
+        ? `Retrieved ${successCount}/${numericIds.length} ${model}s (${errorCount} errors, source: ${dataSource.primary_source})`
+        : `Successfully retrieved ${successCount} ${model}s (source: ${dataSource.primary_source})`;
 
     logInfo(logMessage);
 
     return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(response, null, 2)
-      }]
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(response, null, 2),
+        },
+      ],
     };
-
   } catch (error: any) {
-    throw handleApiError(error, {
-      operation: `Retrieve ${model} details`,
-      resourceType: model as string,
-      resourceId: numericIds.join(', '),
-      customMessages: {
-        '400': `Invalid ${model} parameters. Ensure all IDs are valid numbers.`,
-        '404': `One or more ${model}s not found. Check that the IDs are correct and the ${model}s exist.`,
-        '500': `Metabase server error while retrieving ${model}s. The server may be experiencing issues.`
-      }
-    }, logError);
+    throw handleApiError(
+      error,
+      {
+        operation: `Retrieve ${model} details`,
+        resourceType: model as string,
+        resourceId: numericIds.join(', '),
+        customMessages: {
+          '400': `Invalid ${model} parameters. Ensure all IDs are valid numbers.`,
+          '404': `One or more ${model}s not found. Check that the IDs are correct and the ${model}s exist.`,
+          '500': `Metabase server error while retrieving ${model}s. The server may be experiencing issues.`,
+        },
+      },
+      logError
+    );
   }
 }

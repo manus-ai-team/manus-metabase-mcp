@@ -1,4 +1,11 @@
-import { OptimizedCard, OptimizedDashboard, OptimizedTable, OptimizedDatabase, OptimizedCollection, OptimizedField } from '../../types/optimized.js';
+import {
+  OptimizedCard,
+  OptimizedDashboard,
+  OptimizedTable,
+  OptimizedDatabase,
+  OptimizedCollection,
+  OptimizedField,
+} from '../../types/optimized.js';
 
 /**
  * Optimize card response by removing unnecessary fields that consume tokens
@@ -9,7 +16,7 @@ export function optimizeCardResponse(card: any): OptimizedCard {
     id: card.id,
     name: card.name,
     database_id: card.database_id,
-    retrieved_at: new Date().toISOString()
+    retrieved_at: new Date().toISOString(),
   };
 
   // Add optional fields only if they exist and have meaningful values
@@ -22,10 +29,12 @@ export function optimizeCardResponse(card: any): OptimizedCard {
     optimized.dataset_query = {
       type: card.dataset_query.type,
       database: card.dataset_query.database,
-      native: card.dataset_query.native ? {
-        query: card.dataset_query.native.query,
-        template_tags: card.dataset_query.native.template_tags
-      } : undefined
+      native: card.dataset_query.native
+        ? {
+            query: card.dataset_query.native.query,
+            template_tags: card.dataset_query.native.template_tags,
+          }
+        : undefined,
     };
   }
 
@@ -59,7 +68,7 @@ export function optimizeCardResponse(card: any): OptimizedCard {
       id: card.creator.id,
       email: card.creator.email,
       first_name: card.creator.first_name,
-      last_name: card.creator.last_name
+      last_name: card.creator.last_name,
     };
   }
 
@@ -68,7 +77,7 @@ export function optimizeCardResponse(card: any): OptimizedCard {
     optimized.collection = {
       id: card.collection.id,
       name: card.collection.name,
-      location: card.collection.location
+      location: card.collection.location,
     };
   }
 
@@ -79,7 +88,7 @@ export function optimizeCardResponse(card: any): OptimizedCard {
       name: param.name,
       type: param.type,
       slug: param.slug,
-      target: param.target
+      target: param.target,
     }));
   }
 
@@ -103,7 +112,7 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
   const optimized: OptimizedDashboard = {
     id: dashboard.id,
     name: dashboard.name,
-    retrieved_at: new Date().toISOString()
+    retrieved_at: new Date().toISOString(),
   };
 
   // Add optional fields only if they exist and have meaningful values
@@ -141,20 +150,27 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
         row: dashcard.row,
         col: dashcard.col,
         size_x: dashcard.size_x,
-        size_y: dashcard.size_y
+        size_y: dashcard.size_y,
       };
 
       // Essential parameter mappings for dashboard filtering
-      if (dashcard.parameter_mappings && Array.isArray(dashcard.parameter_mappings) && dashcard.parameter_mappings.length > 0) {
+      if (
+        dashcard.parameter_mappings &&
+        Array.isArray(dashcard.parameter_mappings) &&
+        dashcard.parameter_mappings.length > 0
+      ) {
         optimizedDashcard.parameter_mappings = dashcard.parameter_mappings.map((mapping: any) => ({
           parameter_id: mapping.parameter_id,
           card_id: mapping.card_id,
-          target: mapping.target
+          target: mapping.target,
         }));
       }
 
       // Essential visualization settings
-      if (dashcard.visualization_settings && Object.keys(dashcard.visualization_settings).length > 0) {
+      if (
+        dashcard.visualization_settings &&
+        Object.keys(dashcard.visualization_settings).length > 0
+      ) {
         optimizedDashcard.visualization_settings = dashcard.visualization_settings;
       }
 
@@ -163,7 +179,7 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
         optimizedDashcard.card = {
           id: dashcard.card.id,
           name: dashcard.card.name,
-          database_id: dashcard.card.database_id
+          database_id: dashcard.card.database_id,
         };
 
         // Add optional card fields only if they exist
@@ -184,21 +200,27 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
           optimizedDashcard.card.dataset_query = {
             type: dashcard.card.dataset_query.type,
             database: dashcard.card.dataset_query.database,
-            native: dashcard.card.dataset_query.native ? {
-              query: dashcard.card.dataset_query.native.query,
-              template_tags: dashcard.card.dataset_query.native.template_tags
-            } : undefined
+            native: dashcard.card.dataset_query.native
+              ? {
+                  query: dashcard.card.dataset_query.native.query,
+                  template_tags: dashcard.card.dataset_query.native.template_tags,
+                }
+              : undefined,
           };
         }
 
         // Essential parameters for query execution
-        if (dashcard.card.parameters && Array.isArray(dashcard.card.parameters) && dashcard.card.parameters.length > 0) {
+        if (
+          dashcard.card.parameters &&
+          Array.isArray(dashcard.card.parameters) &&
+          dashcard.card.parameters.length > 0
+        ) {
           optimizedDashcard.card.parameters = dashcard.card.parameters.map((param: any) => ({
             id: param.id,
             name: param.name,
             type: param.type,
             slug: param.slug,
-            target: param.target
+            target: param.target,
           }));
         }
       }
@@ -208,13 +230,17 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
   }
 
   // Essential dashboard-level parameters
-  if (dashboard.parameters && Array.isArray(dashboard.parameters) && dashboard.parameters.length > 0) {
+  if (
+    dashboard.parameters &&
+    Array.isArray(dashboard.parameters) &&
+    dashboard.parameters.length > 0
+  ) {
     optimized.parameters = dashboard.parameters.map((param: any) => ({
       id: param.id,
       name: param.name,
       type: param.type,
       slug: param.slug,
-      sectionId: param.sectionId
+      sectionId: param.sectionId,
     }));
   }
 
@@ -239,7 +265,7 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
       id: creator.id,
       email: creator.email,
       first_name: creator.first_name,
-      last_name: creator.last_name
+      last_name: creator.last_name,
     };
   }
 
@@ -248,7 +274,7 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
     optimized.collection = {
       id: dashboard.collection.id,
       name: dashboard.collection.name,
-      location: dashboard.collection.location
+      location: dashboard.collection.location,
     };
   }
 
@@ -272,7 +298,7 @@ export function optimizeTableResponse(table: any): OptimizedTable {
     field_order: table.field_order,
     is_upload: table.is_upload,
     initial_sync_status: table.initial_sync_status,
-    retrieved_at: new Date().toISOString()
+    retrieved_at: new Date().toISOString(),
   };
 
   // Add optional fields only if they exist and have meaningful values
@@ -297,7 +323,7 @@ export function optimizeTableResponse(table: any): OptimizedTable {
     optimized.db = {
       id: table.db.id,
       name: table.db.name,
-      engine: table.db.engine
+      engine: table.db.engine,
     };
 
     // Add optional db fields
@@ -352,7 +378,7 @@ export function optimizeTableResponse(table: any): OptimizedTable {
       preview_display: field.preview_display,
       fk_target_field_id: field.fk_target_field_id || undefined,
       created_at: field.created_at,
-      updated_at: field.updated_at
+      updated_at: field.updated_at,
     }));
   }
 
@@ -368,7 +394,7 @@ export function optimizeDatabaseResponse(database: any): OptimizedDatabase {
     id: database.id,
     name: database.name,
     engine: database.engine,
-    retrieved_at: new Date().toISOString()
+    retrieved_at: new Date().toISOString(),
   };
 
   // Add optional fields only if they exist and have meaningful values
@@ -400,7 +426,7 @@ export function optimizeDatabaseResponse(database: any): OptimizedDatabase {
     optimized.dbms_version = {
       flavor: database.dbms_version.flavor,
       version: database.dbms_version.version,
-      'semantic-version': database.dbms_version['semantic-version']
+      'semantic-version': database.dbms_version['semantic-version'],
     };
   }
 
@@ -433,7 +459,7 @@ export function optimizeDatabaseResponse(database: any): OptimizedDatabase {
       initial_sync_status: table.initial_sync_status,
       created_at: table.created_at,
       updated_at: table.updated_at,
-      estimated_row_count: table.estimated_row_count || undefined
+      estimated_row_count: table.estimated_row_count || undefined,
     }));
   }
 
@@ -458,7 +484,7 @@ export function optimizeCollectionResponse(collection: any): OptimizedCollection
     is_personal: collection.is_personal,
     created_at: collection.created_at,
     can_delete: collection.can_delete,
-    retrieved_at: new Date().toISOString()
+    retrieved_at: new Date().toISOString(),
   };
 
   // Add optional fields only if they exist and have meaningful values
@@ -487,14 +513,19 @@ export function optimizeCollectionResponse(collection: any): OptimizedCollection
   }
 
   // Essential hierarchy information
-  if (collection.effective_ancestors && Array.isArray(collection.effective_ancestors) && collection.effective_ancestors.length > 0) {
+  if (
+    collection.effective_ancestors &&
+    Array.isArray(collection.effective_ancestors) &&
+    collection.effective_ancestors.length > 0
+  ) {
     optimized.effective_ancestors = collection.effective_ancestors.map((ancestor: any) => ({
-      'metabase.collections.models.collection.root/is-root?': ancestor['metabase.collections.models.collection.root/is-root?'],
+      'metabase.collections.models.collection.root/is-root?':
+        ancestor['metabase.collections.models.collection.root/is-root?'],
       authority_level: ancestor.authority_level,
       name: ancestor.name,
       is_personal: ancestor.is_personal,
       id: ancestor.id,
-      can_write: ancestor.can_write
+      can_write: ancestor.can_write,
     }));
   }
 
@@ -528,9 +559,9 @@ export function optimizeFieldResponse(field: any): OptimizedField {
       id: field.table.id,
       name: field.table.name,
       display_name: field.table.display_name,
-      db_id: field.table.db_id
+      db_id: field.table.db_id,
     },
-    retrieved_at: new Date().toISOString()
+    retrieved_at: new Date().toISOString(),
   };
 
   // Add optional fields only if they exist and have meaningful values
@@ -551,8 +582,8 @@ export function optimizeFieldResponse(field: any): OptimizedField {
     optimized.fingerprint = {
       global: {
         'distinct-count': field.fingerprint.global['distinct-count'],
-        'nil%': field.fingerprint.global['nil%']
-      }
+        'nil%': field.fingerprint.global['nil%'],
+      },
     };
   }
 
@@ -578,7 +609,7 @@ export function optimizeFieldResponse(field: any): OptimizedField {
       table_id: field.target.table_id,
       database_type: field.target.database_type,
       base_type: field.target.base_type,
-      effective_type: field.target.effective_type
+      effective_type: field.target.effective_type,
     };
 
     if (field.target.semantic_type) {

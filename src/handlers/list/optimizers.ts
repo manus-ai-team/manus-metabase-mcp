@@ -7,11 +7,12 @@ export function optimizeCardForList(card: any): ListCard {
   const optimized: ListCard = {
     id: card.id,
     name: card.name,
-    database_id: card.database_id
+    database_id: card.database_id,
   };
 
   if (card.description) optimized.description = card.description;
-  if (card.collection_id !== null && card.collection_id !== undefined) optimized.collection_id = card.collection_id;
+  if (card.collection_id !== null && card.collection_id !== undefined)
+    optimized.collection_id = card.collection_id;
   if (card.archived !== undefined) optimized.archived = card.archived;
   if (card.created_at) optimized.created_at = card.created_at;
   if (card.updated_at) optimized.updated_at = card.updated_at;
@@ -25,11 +26,12 @@ export function optimizeCardForList(card: any): ListCard {
 export function optimizeDashboardForList(dashboard: any): ListDashboard {
   const optimized: ListDashboard = {
     id: dashboard.id,
-    name: dashboard.name
+    name: dashboard.name,
   };
 
   if (dashboard.description) optimized.description = dashboard.description;
-  if (dashboard.collection_id !== null && dashboard.collection_id !== undefined) optimized.collection_id = dashboard.collection_id;
+  if (dashboard.collection_id !== null && dashboard.collection_id !== undefined)
+    optimized.collection_id = dashboard.collection_id;
   if (dashboard.archived !== undefined) optimized.archived = dashboard.archived;
   if (dashboard.created_at) optimized.created_at = dashboard.created_at;
   if (dashboard.updated_at) optimized.updated_at = dashboard.updated_at;
@@ -46,7 +48,7 @@ export function optimizeTableForList(table: any): ListTable {
     name: table.name,
     display_name: table.display_name,
     db_id: table.db_id,
-    active: table.active
+    active: table.active,
   };
 
   if (table.schema) optimized.schema = table.schema;
@@ -62,7 +64,7 @@ export function optimizeDatabaseForList(database: any): ListDatabase {
   const optimized: ListDatabase = {
     id: database.id,
     name: database.name,
-    engine: database.engine
+    engine: database.engine,
   };
 
   if (database.description) optimized.description = database.description;
@@ -82,7 +84,7 @@ export function optimizeCollectionForList(collection: any): ListCollection {
     name: collection.name,
     slug: collection.slug,
     archived: collection.archived,
-    is_personal: collection.is_personal
+    is_personal: collection.is_personal,
   };
 
   if (collection.description) optimized.description = collection.description;

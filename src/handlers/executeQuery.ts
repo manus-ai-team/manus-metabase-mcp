@@ -21,10 +21,7 @@ export async function handleExecuteQuery(
 
   if (!databaseId) {
     logWarn('Missing database_id parameter in execute_query request', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'Database ID parameter is required'
-    );
+    throw new McpError(ErrorCode.InvalidParams, 'Database ID parameter is required');
   }
 
   if (!query || typeof query !== 'string') {
@@ -62,7 +59,9 @@ export async function handleExecuteQuery(
 
     if (existingLimit <= rowLimit) {
       // Existing limit is more restrictive or equal, keep it
-      logDebug(`Keeping existing LIMIT ${existingLimit} as it's more restrictive than or equal to requested ${rowLimit}`);
+      logDebug(
+        `Keeping existing LIMIT ${existingLimit} as it's more restrictive than or equal to requested ${rowLimit}`
+      );
       finalLimit = existingLimit;
       // Don't modify the query
     } else {
@@ -91,43 +90,56 @@ export async function handleExecuteQuery(
     type: 'native',
     native: {
       query: limitedQuery,
-      template_tags: {}
+      template_tags: {},
     },
     parameters: nativeParameters,
-    database: databaseId
+    database: databaseId,
   };
 
   try {
     const response = await apiClient.request<any>('/api/dataset', {
       method: 'POST',
-      body: JSON.stringify(queryData)
+      body: JSON.stringify(queryData),
     });
 
     const rowCount = response?.data?.rows?.length || 0;
-    logInfo(`Successfully executed SQL query against database: ${databaseId}, returned ${rowCount} rows (limit: ${finalLimit})`);
+    logInfo(
+      `Successfully executed SQL query against database: ${databaseId}, returned ${rowCount} rows (limit: ${finalLimit})`
+    );
 
     return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          success: true,
-          query: query,
-          database_id: databaseId,
-          row_count: rowCount,
-          applied_limit: finalLimit,
-          data: response
-        }, null, 2)
-      }]
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              success: true,
+              query: query,
+              database_id: databaseId,
+              row_count: rowCount,
+              applied_limit: finalLimit,
+              data: response,
+            },
+            null,
+            2
+          ),
+        },
+      ],
     };
   } catch (error: any) {
-    throw handleApiError(error, {
-      operation: 'SQL query execution',
-      resourceType: 'database',
-      resourceId: databaseId as number,
-      customMessages: {
-        '400': 'Invalid query parameters or SQL syntax error. Check your query syntax and ensure all table/column names are correct.',
-        '500': 'Database server error. The query may have caused a timeout or database issue.'
-      }
-    }, logError);
+    throw handleApiError(
+      error,
+      {
+        operation: 'SQL query execution',
+        resourceType: 'database',
+        resourceId: databaseId as number,
+        customMessages: {
+          '400':
+            'Invalid query parameters or SQL syntax error. Check your query syntax and ensure all table/column names are correct.',
+          '500': 'Database server error. The query may have caused a timeout or database issue.',
+        },
+      },
+      logError
+    );
   }
 }

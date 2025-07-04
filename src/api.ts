@@ -7,7 +7,7 @@ enum LogLevel {
   INFO = 'info',
   WARN = 'warn',
   ERROR = 'error',
-  FATAL = 'fatal'
+  FATAL = 'fatal',
 }
 
 // Interface for tracking data source in API responses
@@ -63,7 +63,7 @@ export class MetabaseApiClient {
     const logMessage: Record<string, unknown> = {
       timestamp,
       level,
-      message
+      message,
     };
 
     if (data !== undefined) {
@@ -83,7 +83,9 @@ export class MetabaseApiClient {
       const logPrefix = level.toUpperCase();
 
       if (error) {
-        console.error(`[${timestamp}] ${logPrefix}: ${message} - ${error.message || 'Unknown error'}`);
+        console.error(
+          `[${timestamp}] ${logPrefix}: ${message} - ${error.message || 'Unknown error'}`
+        );
       } else {
         console.error(`[${timestamp}] ${logPrefix}: ${message}`);
       }
@@ -108,8 +110,6 @@ export class MetabaseApiClient {
     const errorObj = error instanceof Error ? error : new Error(String(error));
     this.log(LogLevel.ERROR, message, undefined, errorObj);
   }
-
-
 
   /**
    * HTTP request utility method with timeout support
@@ -137,7 +137,7 @@ export class MetabaseApiClient {
       const response = await fetch(url.toString(), {
         ...options,
         headers,
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
@@ -150,7 +150,7 @@ export class MetabaseApiClient {
         throw {
           status: response.status,
           message: response.statusText,
-          data: errorData
+          data: errorData,
         };
       }
 
@@ -169,10 +169,6 @@ export class MetabaseApiClient {
     }
   }
 
-
-
-
-
   /**
    * Get a single dashboard with caching - checks cache first, then API if needed
    */
@@ -181,12 +177,12 @@ export class MetabaseApiClient {
 
     // Check if we have a cached version that's still valid
     const cached = this.dashboardCache.get(dashboardId);
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+    if (cached && now - cached.timestamp < this.CACHE_TTL_MS) {
       this.logDebug(`Using cached data for dashboard ${dashboardId}`);
       return {
         data: cached.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -201,25 +197,27 @@ export class MetabaseApiClient {
       // Cache the result
       this.dashboardCache.set(dashboardId, {
         data: dashboard,
-        timestamp: now
+        timestamp: now,
       });
 
       this.logInfo(`Successfully fetched dashboard ${dashboardId} in ${fetchTime}ms`);
       return {
         data: dashboard,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError(`Failed to fetch dashboard ${dashboardId} from Metabase API`, error);
 
       // If we have any cached version (even stale), return it as fallback
       if (cached) {
-        this.logWarn(`Using stale cached data for dashboard ${dashboardId} as fallback due to API error`);
+        this.logWarn(
+          `Using stale cached data for dashboard ${dashboardId} as fallback due to API error`
+        );
         return {
           data: cached.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -235,12 +233,12 @@ export class MetabaseApiClient {
     const cached = this.cardCache.get(cardId);
 
     // Check if we have cached data that's still valid
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+    if (cached && now - cached.timestamp < this.CACHE_TTL_MS) {
       this.logDebug(`Using cached data for card ${cardId}`);
       return {
         data: cached.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -255,14 +253,14 @@ export class MetabaseApiClient {
       // Update cache with full card data
       this.cardCache.set(cardId, {
         data: card,
-        timestamp: now
+        timestamp: now,
       });
 
       this.logInfo(`Successfully fetched card ${cardId} in ${fetchTime}ms`);
       return {
         data: card,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError(`Failed to fetch card ${cardId} from Metabase API`, error);
@@ -273,7 +271,7 @@ export class MetabaseApiClient {
         return {
           data: cached.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -304,12 +302,12 @@ export class MetabaseApiClient {
     const now = Date.now();
 
     // Check if we have cached data that's still valid
-    if (this.listCardsCache && (now - this.listCardsCache.timestamp) < this.CACHE_TTL_MS) {
+    if (this.listCardsCache && now - this.listCardsCache.timestamp < this.CACHE_TTL_MS) {
       this.logDebug('Using cached data for cards list');
       return {
         data: this.listCardsCache.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -324,14 +322,14 @@ export class MetabaseApiClient {
       // Cache the result
       this.listCardsCache = {
         data: cards,
-        timestamp: now
+        timestamp: now,
       };
 
       this.logInfo(`Successfully fetched cards list in ${fetchTime}ms`);
       return {
         data: cards,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError('Failed to fetch cards list from Metabase API', error);
@@ -342,7 +340,7 @@ export class MetabaseApiClient {
         return {
           data: this.listCardsCache.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -357,12 +355,12 @@ export class MetabaseApiClient {
     const now = Date.now();
 
     // Check if we have cached data that's still valid
-    if (this.listDashboardsCache && (now - this.listDashboardsCache.timestamp) < this.CACHE_TTL_MS) {
+    if (this.listDashboardsCache && now - this.listDashboardsCache.timestamp < this.CACHE_TTL_MS) {
       this.logDebug('Using cached data for dashboards list');
       return {
         data: this.listDashboardsCache.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -377,14 +375,14 @@ export class MetabaseApiClient {
       // Cache the result
       this.listDashboardsCache = {
         data: dashboards,
-        timestamp: now
+        timestamp: now,
       };
 
       this.logInfo(`Successfully fetched dashboards list in ${fetchTime}ms`);
       return {
         data: dashboards,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError('Failed to fetch dashboards list from Metabase API', error);
@@ -395,7 +393,7 @@ export class MetabaseApiClient {
         return {
           data: this.listDashboardsCache.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -410,12 +408,12 @@ export class MetabaseApiClient {
     const now = Date.now();
 
     // Check if we have cached data that's still valid
-    if (this.listTablesCache && (now - this.listTablesCache.timestamp) < this.CACHE_TTL_MS) {
+    if (this.listTablesCache && now - this.listTablesCache.timestamp < this.CACHE_TTL_MS) {
       this.logDebug('Using cached data for tables list');
       return {
         data: this.listTablesCache.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -430,14 +428,14 @@ export class MetabaseApiClient {
       // Cache the result
       this.listTablesCache = {
         data: tables,
-        timestamp: now
+        timestamp: now,
       };
 
       this.logInfo(`Successfully fetched tables list in ${fetchTime}ms`);
       return {
         data: tables,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError('Failed to fetch tables list from Metabase API', error);
@@ -448,7 +446,7 @@ export class MetabaseApiClient {
         return {
           data: this.listTablesCache.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -463,12 +461,12 @@ export class MetabaseApiClient {
     const now = Date.now();
 
     // Check if we have cached data that's still valid
-    if (this.listDatabasesCache && (now - this.listDatabasesCache.timestamp) < this.CACHE_TTL_MS) {
+    if (this.listDatabasesCache && now - this.listDatabasesCache.timestamp < this.CACHE_TTL_MS) {
       this.logDebug('Using cached data for databases list');
       return {
         data: this.listDatabasesCache.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -486,14 +484,16 @@ export class MetabaseApiClient {
       // Cache the result
       this.listDatabasesCache = {
         data: databasesArray,
-        timestamp: now
+        timestamp: now,
       };
 
-      this.logInfo(`Successfully fetched databases list in ${fetchTime}ms (${databasesArray.length} databases)`);
+      this.logInfo(
+        `Successfully fetched databases list in ${fetchTime}ms (${databasesArray.length} databases)`
+      );
       return {
         data: databasesArray,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError('Failed to fetch databases list from Metabase API', error);
@@ -504,7 +504,7 @@ export class MetabaseApiClient {
         return {
           data: this.listDatabasesCache.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -519,12 +519,15 @@ export class MetabaseApiClient {
     const now = Date.now();
 
     // Check if we have cached data that's still valid
-    if (this.listCollectionsCache && (now - this.listCollectionsCache.timestamp) < this.CACHE_TTL_MS) {
+    if (
+      this.listCollectionsCache &&
+      now - this.listCollectionsCache.timestamp < this.CACHE_TTL_MS
+    ) {
       this.logDebug('Using cached data for collections list');
       return {
         data: this.listCollectionsCache.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -539,14 +542,14 @@ export class MetabaseApiClient {
       // Cache the result
       this.listCollectionsCache = {
         data: collections,
-        timestamp: now
+        timestamp: now,
       };
 
       this.logInfo(`Successfully fetched collections list in ${fetchTime}ms`);
       return {
         data: collections,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError('Failed to fetch collections list from Metabase API', error);
@@ -557,7 +560,7 @@ export class MetabaseApiClient {
         return {
           data: this.listCollectionsCache.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -591,8 +594,6 @@ export class MetabaseApiClient {
     this.logInfo('All caches cleared (individual items and lists)');
   }
 
-
-
   /**
    * Get Metabase session token (only needed for session auth method)
    */
@@ -601,7 +602,7 @@ export class MetabaseApiClient {
     if (this.authMethod === AuthMethod.API_KEY && this.apiKey) {
       this.logInfo('Using API Key authentication', {
         keyLength: this.apiKey.length,
-        keyFormat: this.apiKey.includes('mb_') ? 'starts with mb_' : 'other format'
+        keyFormat: this.apiKey.includes('mb_') ? 'starts with mb_' : 'other format',
       });
       return this.apiKey;
     }
@@ -626,10 +627,7 @@ export class MetabaseApiClient {
       return this.sessionToken;
     } catch (error) {
       this.logError('Authentication with Metabase failed', error);
-      throw new McpError(
-        ErrorCode.InternalError,
-        'Failed to authenticate with Metabase'
-      );
+      throw new McpError(ErrorCode.InternalError, 'Failed to authenticate with Metabase');
     }
   }
 
@@ -641,12 +639,12 @@ export class MetabaseApiClient {
     const cached = this.tableCache.get(tableId);
 
     // Check if we have cached data that's still valid
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+    if (cached && now - cached.timestamp < this.CACHE_TTL_MS) {
       this.logDebug(`Using cached data for table ${tableId}`);
       return {
         data: cached.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -661,14 +659,14 @@ export class MetabaseApiClient {
       // Update cache with full table data
       this.tableCache.set(tableId, {
         data: table,
-        timestamp: now
+        timestamp: now,
       });
 
       this.logInfo(`Successfully fetched table ${tableId} in ${fetchTime}ms`);
       return {
         data: table,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError(`Failed to fetch table ${tableId} from Metabase API`, error);
@@ -679,7 +677,7 @@ export class MetabaseApiClient {
         return {
           data: cached.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -695,12 +693,12 @@ export class MetabaseApiClient {
     const cached = this.databaseCache.get(databaseId);
 
     // Check if we have cached data that's still valid
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+    if (cached && now - cached.timestamp < this.CACHE_TTL_MS) {
       this.logDebug(`Using cached data for database ${databaseId}`);
       return {
         data: cached.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -715,25 +713,27 @@ export class MetabaseApiClient {
       // Update cache with full database data
       this.databaseCache.set(databaseId, {
         data: database,
-        timestamp: now
+        timestamp: now,
       });
 
       this.logInfo(`Successfully fetched database ${databaseId} in ${fetchTime}ms`);
       return {
         data: database,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError(`Failed to fetch database ${databaseId} from Metabase API`, error);
 
       // If we have stale cached data, return it as fallback
       if (cached) {
-        this.logWarn(`Using stale cached data for database ${databaseId} as fallback due to API error`);
+        this.logWarn(
+          `Using stale cached data for database ${databaseId} as fallback due to API error`
+        );
         return {
           data: cached.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -749,12 +749,12 @@ export class MetabaseApiClient {
     const cached = this.collectionCache.get(collectionId);
 
     // Check if we have cached data that's still valid
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+    if (cached && now - cached.timestamp < this.CACHE_TTL_MS) {
       this.logDebug(`Using cached data for collection ${collectionId}`);
       return {
         data: cached.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -769,25 +769,27 @@ export class MetabaseApiClient {
       // Update cache with full collection data
       this.collectionCache.set(collectionId, {
         data: collection,
-        timestamp: now
+        timestamp: now,
       });
 
       this.logInfo(`Successfully fetched collection ${collectionId} in ${fetchTime}ms`);
       return {
         data: collection,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError(`Failed to fetch collection ${collectionId} from Metabase API`, error);
 
       // If we have stale cached data, return it as fallback
       if (cached) {
-        this.logWarn(`Using stale cached data for collection ${collectionId} as fallback due to API error`);
+        this.logWarn(
+          `Using stale cached data for collection ${collectionId} as fallback due to API error`
+        );
         return {
           data: cached.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
@@ -803,12 +805,12 @@ export class MetabaseApiClient {
     const cached = this.fieldCache.get(fieldId);
 
     // Check if we have cached data that's still valid
-    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+    if (cached && now - cached.timestamp < this.CACHE_TTL_MS) {
       this.logDebug(`Using cached data for field ${fieldId}`);
       return {
         data: cached.data,
         source: 'cache',
-        fetchTime: 0
+        fetchTime: 0,
       };
     }
 
@@ -823,14 +825,14 @@ export class MetabaseApiClient {
       // Update cache with full field data
       this.fieldCache.set(fieldId, {
         data: field,
-        timestamp: now
+        timestamp: now,
       });
 
       this.logInfo(`Successfully fetched field ${fieldId} in ${fetchTime}ms`);
       return {
         data: field,
         source: 'api',
-        fetchTime
+        fetchTime,
       };
     } catch (error) {
       this.logError(`Failed to fetch field ${fieldId} from Metabase API`, error);
@@ -841,15 +843,13 @@ export class MetabaseApiClient {
         return {
           data: cached.data,
           source: 'cache',
-          fetchTime: 0
+          fetchTime: 0,
         };
       }
 
       throw error;
     }
   }
-
-
 
   /**
    * Clear the tables cache

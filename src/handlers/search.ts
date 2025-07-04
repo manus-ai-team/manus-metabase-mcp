@@ -17,7 +17,8 @@ export async function handleSearch(
   const models = (request.params?.arguments?.models as string[]) || ['card', 'dashboard'];
   const maxResults = (request.params?.arguments?.max_results as number) || 50;
   const searchNativeQuery = (request.params?.arguments?.search_native_query as boolean) || false;
-  const includeDashboardQuestions = (request.params?.arguments?.include_dashboard_questions as boolean) ?? false;
+  const includeDashboardQuestions =
+    (request.params?.arguments?.include_dashboard_questions as boolean) ?? false;
   const ids = request.params?.arguments?.ids as number[] | undefined;
   const archived = request.params?.arguments?.archived as boolean | undefined;
   const databaseId = request.params?.arguments?.database_id as number | undefined;
@@ -69,7 +70,9 @@ export async function handleSearch(
       );
     }
     if (databaseId) {
-      logWarn('database_id parameter cannot be used when searching solely for databases', { requestId });
+      logWarn('database_id parameter cannot be used when searching solely for databases', {
+        requestId,
+      });
       throw new McpError(
         ErrorCode.InvalidParams,
         'database_id parameter cannot be used when searching for databases - use query instead'
@@ -87,7 +90,18 @@ export async function handleSearch(
   }
 
   // Validate model types
-  const validModels = ['card', 'dashboard', 'table', 'dataset', 'segment', 'collection', 'database', 'action', 'indexed-entity', 'metric'];
+  const validModels = [
+    'card',
+    'dashboard',
+    'table',
+    'dataset',
+    'segment',
+    'collection',
+    'database',
+    'action',
+    'indexed-entity',
+    'metric',
+  ];
   const invalidModels = models.filter(model => !validModels.includes(model));
   if (invalidModels.length > 0) {
     logWarn(`Invalid model types specified: ${invalidModels.join(', ')}`, { requestId });
@@ -100,15 +114,14 @@ export async function handleSearch(
   // Validate database_id if provided
   if (databaseId && (typeof databaseId !== 'number' || databaseId <= 0)) {
     logWarn('Invalid database_id parameter', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'database_id must be a positive integer'
-    );
+    throw new McpError(ErrorCode.InvalidParams, 'database_id must be a positive integer');
   }
 
   // Validate search_native_query - only allowed when searching cards exclusively
   if (searchNativeQuery && (models.length !== 1 || models[0] !== 'card')) {
-    logWarn('search_native_query parameter can only be used when searching cards exclusively', { requestId });
+    logWarn('search_native_query parameter can only be used when searching cards exclusively', {
+      requestId,
+    });
     throw new McpError(
       ErrorCode.InvalidParams,
       'search_native_query parameter can only be used when models=["card"] - it searches within SQL query content of cards'
@@ -117,7 +130,10 @@ export async function handleSearch(
 
   // Validate include_dashboard_questions - only allowed when dashboard is in models
   if (includeDashboardQuestions && !models.includes('dashboard')) {
-    logWarn('include_dashboard_questions parameter can only be used when dashboard model is included', { requestId });
+    logWarn(
+      'include_dashboard_questions parameter can only be used when dashboard model is included',
+      { requestId }
+    );
     throw new McpError(
       ErrorCode.InvalidParams,
       'include_dashboard_questions parameter can only be used when "dashboard" is included in the models array'
@@ -175,7 +191,7 @@ export async function handleSearch(
       results = [];
     }
 
-        // Enhance results with model-specific metadata (without individual recommendations)
+    // Enhance results with model-specific metadata (without individual recommendations)
     const enhancedResults = results.map((item: any) => {
       // Base item without created_at and updated_at
       return {
@@ -186,7 +202,7 @@ export async function handleSearch(
         collection_name: item.collection_name,
         database_id: item.database_id || null,
         table_id: item.table_id || null,
-        archived: item.archived || false
+        archived: item.archived || false,
       };
     });
 
@@ -200,21 +216,28 @@ export async function handleSearch(
     }, {});
 
     const totalResults = enhancedResults.length;
-    const searchMethod = ids && ids.length > 0 ? 'id_search' :
-                       databaseId && !searchQuery ? 'database_search' : 'query_search';
+    const searchMethod =
+      ids && ids.length > 0
+        ? 'id_search'
+        : databaseId && !searchQuery
+          ? 'database_search'
+          : 'query_search';
 
-    logInfo(`Search found ${totalResults} items across ${Object.keys(resultsByModel).length} model types in ${searchTime}ms`);
+    logInfo(
+      `Search found ${totalResults} items across ${Object.keys(resultsByModel).length} model types in ${searchTime}ms`
+    );
 
     // Build standardized parameters object for response
     const usedParameters: any = {
       query: searchQuery || null,
       models: models,
-      max_results: maxResults
+      max_results: maxResults,
     };
 
     // Add optional parameters that were actually used
     if (searchNativeQuery) usedParameters.search_native_query = searchNativeQuery;
-    if (includeDashboardQuestions) usedParameters.include_dashboard_questions = includeDashboardQuestions;
+    if (includeDashboardQuestions)
+      usedParameters.include_dashboard_questions = includeDashboardQuestions;
     if (ids && ids.length > 0) usedParameters.ids = ids;
     if (archived === true) usedParameters.archived = archived;
     if (databaseId) usedParameters.database_id = databaseId;
@@ -227,66 +250,87 @@ export async function handleSearch(
     foundModels.forEach(model => {
       switch (model) {
         case 'card':
-          recommendedActions[model] = 'Use retrieve(model="card", ids=[card_id]) to get the SQL query, then execute_query() with the database_id for reliable execution';
+          recommendedActions[model] =
+            'Use retrieve(model="card", ids=[card_id]) to get the SQL query, then execute_query() with the database_id for reliable execution';
           break;
         case 'dashboard':
-          recommendedActions[model] = 'Use retrieve(model="dashboard", ids=[dashboard_id]) to get all cards in this dashboard and their details';
+          recommendedActions[model] =
+            'Use retrieve(model="dashboard", ids=[dashboard_id]) to get all cards in this dashboard and their details';
           break;
         case 'table':
-          recommendedActions[model] = 'Use retrieve(model="table", ids=[table_id]) to get detailed metadata including column information and relationships';
+          recommendedActions[model] =
+            'Use retrieve(model="table", ids=[table_id]) to get detailed metadata including column information and relationships';
           break;
         case 'database':
-          recommendedActions[model] = 'Use retrieve(model="database", ids=[database_id]) to get database details including available tables';
+          recommendedActions[model] =
+            'Use retrieve(model="database", ids=[database_id]) to get database details including available tables';
           break;
         case 'dataset':
-          recommendedActions[model] = 'Use retrieve(model="card", ids=[dataset_id]) to get the dataset definition, then execute_query() to run it';
+          recommendedActions[model] =
+            'Use retrieve(model="card", ids=[dataset_id]) to get the dataset definition, then execute_query() to run it';
           break;
         case 'collection':
-          recommendedActions[model] = 'Use retrieve(model="collection", ids=[collection_id]) to get collection details and organizational structure for managing Metabase content like questions and dashboards';
+          recommendedActions[model] =
+            'Use retrieve(model="collection", ids=[collection_id]) to get collection details and organizational structure for managing Metabase content like questions and dashboards';
           break;
         case 'field':
-          recommendedActions[model] = 'Use retrieve(model="field", ids=[field_id]) to get detailed field metadata including data types and constraints';
+          recommendedActions[model] =
+            'Use retrieve(model="field", ids=[field_id]) to get detailed field metadata including data types and constraints';
           break;
         case 'segment':
-          recommendedActions[model] = 'Use retrieve(model="card", ids=[segment_id]) to get the segment definition and apply it in your queries';
+          recommendedActions[model] =
+            'Use retrieve(model="card", ids=[segment_id]) to get the segment definition and apply it in your queries';
           break;
         case 'metric':
-          recommendedActions[model] = 'Use retrieve(model="card", ids=[metric_id]) to get the metric definition and incorporate it into your analysis';
+          recommendedActions[model] =
+            'Use retrieve(model="card", ids=[metric_id]) to get the metric definition and incorporate it into your analysis';
           break;
         default:
-          recommendedActions[model] = 'Use the appropriate retrieve() command with the model type and ID to get detailed information';
+          recommendedActions[model] =
+            'Use the appropriate retrieve() command with the model type and ID to get detailed information';
       }
     });
 
     return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          search_metrics: {
-            method: searchMethod,
-            total_results: totalResults,
-            search_time_ms: searchTime,
-            parameters_used: usedParameters
-          },
-          recommended_actions: recommendedActions,
-          results_by_model: Object.keys(resultsByModel).map(model => ({
-            model,
-            count: resultsByModel[model].length
-          })),
-          results: enhancedResults
-        }, null, 2)
-      }]
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              search_metrics: {
+                method: searchMethod,
+                total_results: totalResults,
+                search_time_ms: searchTime,
+                parameters_used: usedParameters,
+              },
+              recommended_actions: recommendedActions,
+              results_by_model: Object.keys(resultsByModel).map(model => ({
+                model,
+                count: resultsByModel[model].length,
+              })),
+              results: enhancedResults,
+            },
+            null,
+            2
+          ),
+        },
+      ],
     };
   } catch (error: any) {
-    throw handleApiError(error, {
-      operation: 'Search',
-      resourceType: databaseId ? 'database' : undefined,
-      resourceId: databaseId,
-      customMessages: {
-        '400': 'Invalid search parameters. Check model types, database_id, or premium feature requirements (verified parameter).',
-        '403': 'Access denied. You may not have permission to search these items.',
-        '404': 'Search endpoint not found. This Metabase version may not support the search API.'
-      }
-    }, logError);
+    throw handleApiError(
+      error,
+      {
+        operation: 'Search',
+        resourceType: databaseId ? 'database' : undefined,
+        resourceId: databaseId,
+        customMessages: {
+          '400':
+            'Invalid search parameters. Check model types, database_id, or premium feature requirements (verified parameter).',
+          '403': 'Access denied. You may not have permission to search these items.',
+          '404': 'Search endpoint not found. This Metabase version may not support the search API.',
+        },
+      },
+      logError
+    );
   }
 }

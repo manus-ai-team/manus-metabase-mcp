@@ -26,26 +26,17 @@ export async function handleExportQuery(
 
   if (!databaseId) {
     logWarn('Missing database_id parameter in export_query request', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'Database ID parameter is required'
-    );
+    throw new McpError(ErrorCode.InvalidParams, 'Database ID parameter is required');
   }
 
   if (!query) {
     logWarn('Missing query parameter in export_query request', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'SQL query parameter is required'
-    );
+    throw new McpError(ErrorCode.InvalidParams, 'SQL query parameter is required');
   }
 
   if (!['csv', 'json', 'xlsx'].includes(format)) {
     logWarn(`Invalid format parameter in export_query request: ${format}`, { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'Format must be one of: csv, json, xlsx'
-    );
+    throw new McpError(ErrorCode.InvalidParams, 'Format must be one of: csv, json, xlsx');
   }
 
   logDebug(`Exporting query in ${format} format from database ID: ${databaseId}`);
@@ -56,10 +47,10 @@ export async function handleExportQuery(
       type: 'native',
       native: {
         query: query,
-        template_tags: {}
+        template_tags: {},
       },
       parameters: nativeParameters,
-      database: databaseId
+      database: databaseId,
     };
 
     // Use the export endpoint which supports larger result sets (up to 1M rows)
@@ -70,7 +61,7 @@ export async function handleExportQuery(
       query: queryData,
       format_rows: false,
       pivot_results: false,
-      visualization_settings: {}
+      visualization_settings: {},
     };
 
     // For export endpoints, we need to handle different response types
@@ -89,7 +80,7 @@ export async function handleExportQuery(
     const response = await fetch(url.toString(), {
       method: 'POST',
       headers,
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -99,7 +90,7 @@ export async function handleExportQuery(
       throw {
         status: response.status,
         message: response.statusText,
-        data: errorData
+        data: errorData,
       };
     }
 
@@ -114,9 +105,10 @@ export async function handleExportQuery(
         // JSON export format might have different structures, let's be more flexible
         if (responseData && typeof responseData === 'object') {
           // Try different possible structures for row counting
-          rowCount = responseData?.data?.rows?.length ??
-                    responseData?.rows?.length ??
-                    (Array.isArray(responseData) ? responseData.length : 0);
+          rowCount =
+            responseData?.data?.rows?.length ??
+            responseData?.rows?.length ??
+            (Array.isArray(responseData) ? responseData.length : 0);
         }
         logDebug(`JSON export row count: ${rowCount}`);
       } else if (format === 'csv') {
@@ -139,21 +131,27 @@ export async function handleExportQuery(
 
     // Validate that we have data before proceeding with file operations
     // For XLSX, check file size; for others, check row count
-    const hasData = format === 'xlsx' ? fileSize > 100 : (rowCount != null && rowCount > 0);
+    const hasData = format === 'xlsx' ? fileSize > 100 : rowCount != null && rowCount > 0;
     if (!hasData) {
       logWarn(`Query returned no data for export`, { requestId });
       return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            message: "Query executed successfully but returned no data to export",
-            query: query,
-            database_id: databaseId,
-            format: format,
-            row_count: rowCount
-          }, null, 2)
-        }]
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                message: 'Query executed successfully but returned no data to export',
+                query: query,
+                database_id: databaseId,
+                format: format,
+                row_count: rowCount,
+              },
+              null,
+              2
+            ),
+          },
+        ],
       };
     }
 
@@ -204,13 +202,13 @@ export async function handleExportQuery(
     if (fileSaveError) {
       const errorResponse: any = {
         success: false,
-        message: "Export completed but failed to save file",
+        message: 'Export completed but failed to save file',
         error: fileSaveError,
         query: query,
         database_id: databaseId,
         format: format,
         row_count: rowCount,
-        intended_file_path: savedFilePath
+        intended_file_path: savedFilePath,
       };
 
       // Add file size for all formats
@@ -219,43 +217,52 @@ export async function handleExportQuery(
       }
 
       return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(errorResponse, null, 2)
-        }],
-        isError: true
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(errorResponse, null, 2),
+          },
+        ],
+        isError: true,
       };
     }
 
     // Successful export - return standardized JSON response
     const successResponse: any = {
       success: true,
-      message: "Export completed successfully",
+      message: 'Export completed successfully',
       query: query,
       file_path: savedFilePath,
       filename: filename,
       format: format,
       row_count: rowCount,
       database_id: databaseId,
-      file_size_bytes: fileSize
+      file_size_bytes: fileSize,
     };
 
     return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(successResponse, null, 2)
-      }]
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(successResponse, null, 2),
+        },
+      ],
     };
   } catch (error: any) {
-    throw handleApiError(error, {
-      operation: 'Export query',
-      resourceType: 'database',
-      resourceId: databaseId,
-      customMessages: {
-        '400': 'Invalid query parameters, SQL syntax error, or export format issue. Ensure format is csv, json, or xlsx.',
-        '413': 'Export payload too large. Try reducing the result set size or use query filters.',
-        '500': 'Database server error. The query may have caused a timeout or database issue.'
-      }
-    }, logError);
+    throw handleApiError(
+      error,
+      {
+        operation: 'Export query',
+        resourceType: 'database',
+        resourceId: databaseId,
+        customMessages: {
+          '400':
+            'Invalid query parameters, SQL syntax error, or export format issue. Ensure format is csv, json, or xlsx.',
+          '413': 'Export payload too large. Try reducing the result set size or use query filters.',
+          '500': 'Database server error. The query may have caused a timeout or database issue.',
+        },
+      },
+      logError
+    );
   }
 }

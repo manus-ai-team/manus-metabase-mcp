@@ -9,7 +9,7 @@ import {
   optimizeDashboardForList,
   optimizeTableForList,
   optimizeDatabaseForList,
-  optimizeCollectionForList
+  optimizeCollectionForList,
 } from './optimizers.js';
 
 export async function handleList(
@@ -33,7 +33,13 @@ export async function handleList(
   }
 
   // Validate model type
-  const supportedModels: SupportedListModel[] = ['cards', 'dashboards', 'tables', 'databases', 'collections'];
+  const supportedModels: SupportedListModel[] = [
+    'cards',
+    'dashboards',
+    'tables',
+    'databases',
+    'collections',
+  ];
   if (!supportedModels.includes(model as SupportedListModel)) {
     logWarn(`Invalid model type: ${model}`, { requestId });
     throw new McpError(
@@ -44,7 +50,7 @@ export async function handleList(
 
   logDebug(`Listing ${model} from Metabase`);
 
-      try {
+  try {
     const startTime = Date.now();
     let optimizeFunction: (item: any) => any;
     let apiResponse: any;
@@ -91,7 +97,9 @@ export async function handleList(
         throw new Error(`Unsupported model: ${model}`);
     }
 
-            logDebug(`Fetching ${model} from ${dataSource} (${dataSource === 'api' ? 'fresh data' : 'cached data'})`);
+    logDebug(
+      `Fetching ${model} from ${dataSource} (${dataSource === 'api' ? 'fresh data' : 'cached data'})`
+    );
 
     // Optimize each item for list view
     const optimizedItems = apiResponse.map(optimizeFunction);
@@ -108,60 +116,72 @@ export async function handleList(
       data_source: {
         source: dataSource,
         fetch_time_ms: fetchTime,
-        cache_status: dataSource === 'cache' ? 'hit' : 'miss'
+        cache_status: dataSource === 'cache' ? 'hit' : 'miss',
       },
       performance_metrics: {
         total_time_ms: totalTime,
         api_fetch_time_ms: fetchTime,
         optimization_time_ms: totalTime - fetchTime,
-        average_time_per_item_ms: totalItems > 0 ? Math.round((totalTime - fetchTime) / totalItems) : 0
+        average_time_per_item_ms:
+          totalItems > 0 ? Math.round((totalTime - fetchTime) / totalItems) : 0,
       },
       retrieved_at: new Date().toISOString(),
-      results: optimizedItems
+      results: optimizedItems,
     };
 
     response.message = `Successfully listed ${totalItems} ${model} (source: ${dataSource}).`;
 
     // Add usage guidance
-    response.usage_guidance = 'This list provides an overview of available items. Use retrieve() with specific model types and IDs to get detailed information for further operations like execute_query.';
+    response.usage_guidance =
+      'This list provides an overview of available items. Use retrieve() with specific model types and IDs to get detailed information for further operations like execute_query.';
 
     // Add model-specific recommendation
     switch (model as SupportedListModel) {
       case 'cards':
-        response.recommendation = 'Use retrieve(model="card", ids=[...]) to get SQL queries and execute them with execute_query()';
+        response.recommendation =
+          'Use retrieve(model="card", ids=[...]) to get SQL queries and execute them with execute_query()';
         break;
       case 'dashboards':
-        response.recommendation = 'Use retrieve(model="dashboard", ids=[...]) to get dashboard details and card information';
+        response.recommendation =
+          'Use retrieve(model="dashboard", ids=[...]) to get dashboard details and card information';
         break;
       case 'tables':
-        response.recommendation = 'Use retrieve(model="table", ids=[...]) to get detailed schema information for query construction';
+        response.recommendation =
+          'Use retrieve(model="table", ids=[...]) to get detailed schema information for query construction';
         break;
       case 'databases':
-        response.recommendation = 'Use retrieve(model="database", ids=[...]) to get connection details and available tables';
+        response.recommendation =
+          'Use retrieve(model="database", ids=[...]) to get connection details and available tables';
         break;
       case 'collections':
-        response.recommendation = 'Use retrieve(model="collection", ids=[...]) to get organizational structure and content management details';
+        response.recommendation =
+          'Use retrieve(model="collection", ids=[...]) to get organizational structure and content management details';
         break;
     }
 
     logInfo(`Successfully listed ${totalItems} ${model}`);
 
     return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(response, null, 2)
-      }]
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(response, null, 2),
+        },
+      ],
     };
-
   } catch (error: any) {
-    throw handleApiError(error, {
-      operation: `List ${model}`,
-      resourceType: model,
-      customMessages: {
-        '400': `Invalid list parameters. Ensure model type is valid.`,
-        '404': `List endpoint not found for ${model}. Check that the model type is supported.`,
-        '500': `Metabase server error while listing ${model}. The server may be experiencing issues.`
-      }
-    }, logError);
+    throw handleApiError(
+      error,
+      {
+        operation: `List ${model}`,
+        resourceType: model,
+        customMessages: {
+          '400': `Invalid list parameters. Ensure model type is valid.`,
+          '404': `List endpoint not found for ${model}. Check that the model type is supported.`,
+          '500': `Metabase server error while listing ${model}. The server may be experiencing issues.`,
+        },
+      },
+      logError
+    );
   }
 }

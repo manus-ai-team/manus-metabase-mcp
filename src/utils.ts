@@ -79,10 +79,12 @@ export function stripCardFields(card: any): MinimalCard {
   if (card.dataset_query) {
     result.dataset_query = {
       type: card.dataset_query.type,
-      native: card.dataset_query.native ? {
-        query: card.dataset_query.native.query,
-        template_tags: card.dataset_query.native.template_tags
-      } : undefined
+      native: card.dataset_query.native
+        ? {
+            query: card.dataset_query.native.query,
+            template_tags: card.dataset_query.native.template_tags,
+          }
+        : undefined,
     };
   }
 
@@ -121,7 +123,7 @@ export function stripDashboardCardFields(dashcard: any): MinimalDashboardCard {
     result.parameter_mappings = dashcard.parameter_mappings.map((mapping: any) => ({
       parameter_id: mapping.parameter_id,
       card_id: mapping.card_id,
-      target: mapping.target
+      target: mapping.target,
     }));
   }
 
@@ -153,10 +155,12 @@ export function stripDashboardCardFields(dashcard: any): MinimalDashboardCard {
     if (dashcard.card.dataset_query) {
       result.card.dataset_query = {
         type: dashcard.card.dataset_query.type,
-        native: dashcard.card.dataset_query.native ? {
-          query: dashcard.card.dataset_query.native.query,
-          template_tags: dashcard.card.dataset_query.native.template_tags
-        } : undefined
+        native: dashcard.card.dataset_query.native
+          ? {
+              query: dashcard.card.dataset_query.native.query,
+              template_tags: dashcard.card.dataset_query.native.template_tags,
+            }
+          : undefined,
       };
     }
   }
@@ -277,12 +281,14 @@ Export Method: Metabase high-capacity API (supports up to 1M rows)${statusMessag
 
 ## ${formatUpper} Data:
 
-${format === 'xlsx' ?
-    `Excel file exported successfully. ${saveFile && !fileSaveError ?
-      `File has been saved to: ${savedFilePath}\nCompatible with: Excel, Google Sheets, LibreOffice Calc, and other spreadsheet applications` :
-      'To save this Excel file:\n1. Set save_file: true in your export_query parameters\n2. The file will be automatically saved to your Downloads folder\n3. Open with Excel, Google Sheets, or any spreadsheet application'
-    }\n\nTechnical Details:\n- Binary Data: Contains Excel binary data (.xlsx format)\n- High Capacity: Supports up to 1 million rows (vs. 2,000 row limit of standard queries)\n- Native Format: Preserves data types and formatting for spreadsheet applications` :
-    '```' + format + '\n'
+${
+  format === 'xlsx'
+    ? `Excel file exported successfully. ${
+        saveFile && !fileSaveError
+          ? `File has been saved to: ${savedFilePath}\nCompatible with: Excel, Google Sheets, LibreOffice Calc, and other spreadsheet applications`
+          : 'To save this Excel file:\n1. Set save_file: true in your export_query parameters\n2. The file will be automatically saved to your Downloads folder\n3. Open with Excel, Google Sheets, or any spreadsheet application'
+      }\n\nTechnical Details:\n- Binary Data: Contains Excel binary data (.xlsx format)\n- High Capacity: Supports up to 1 million rows (vs. 2,000 row limit of standard queries)\n- Native Format: Preserves data types and formatting for spreadsheet applications`
+    : '```' + format + '\n'
 }`;
 }
 
@@ -393,7 +399,10 @@ function getStatusCodeMessage(statusCode: string, context: ErrorContext): string
       return `Request payload too large. Try reducing the result set size or use query filters.`;
 
     case '500':
-      if (operation.toLowerCase().includes('query') || operation.toLowerCase().includes('execute')) {
+      if (
+        operation.toLowerCase().includes('query') ||
+        operation.toLowerCase().includes('execute')
+      ) {
         return `Database server error. The query may have caused a timeout or database issue.`;
       }
       return `Metabase server error. The server may be experiencing issues.`;
@@ -525,10 +534,10 @@ export function saveRawStructure(model: string, rawData: any, enableSave: boolea
         essential_fields: [],
         fields_to_investigate: [],
         likely_removable_fields: [],
-        note: 'These fields need to be manually categorized based on usage analysis'
+        note: 'These fields need to be manually categorized based on usage analysis',
       },
       response_structure: structure,
-      flattened_fields: flattenedFields
+      flattened_fields: flattenedFields,
     };
 
     // Ensure directory exists

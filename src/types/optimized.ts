@@ -349,7 +349,9 @@ export function isOptimizedDatabase(response: OptimizedResponse): response is Op
 /**
  * Type guard to check if response is an optimized collection
  */
-export function isOptimizedCollection(response: OptimizedResponse): response is OptimizedCollection {
+export function isOptimizedCollection(
+  response: OptimizedResponse
+): response is OptimizedCollection {
   return 'slug' in response && 'effective_location' in response;
 }
 
