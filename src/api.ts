@@ -32,6 +32,13 @@ export class MetabaseApiClient {
   private databaseCache: Map<number, { data: any; timestamp: number }> = new Map();
   private collectionCache: Map<number, { data: any; timestamp: number }> = new Map();
   private fieldCache: Map<number, { data: any; timestamp: number }> = new Map();
+
+  // List cache system - separate from individual item cache for different optimizations
+  private listCardsCache: { data: any[]; timestamp: number } | null = null;
+  private listDashboardsCache: { data: any[]; timestamp: number } | null = null;
+  private listTablesCache: { data: any[]; timestamp: number } | null = null;
+  private listDatabasesCache: { data: any[]; timestamp: number } | null = null;
+  private listCollectionsCache: { data: any[]; timestamp: number } | null = null;
   private readonly CACHE_TTL_MS: number;
   private readonly REQUEST_TIMEOUT_MS: number;
 
@@ -291,7 +298,287 @@ export class MetabaseApiClient {
   }
 
   /**
-   * Clear all caches (cards, dashboards, tables, and databases)
+   * Get list of cards with caching
+   */
+  async getCardsList(): Promise<CachedResponse<any[]>> {
+    const now = Date.now();
+
+    // Check if we have cached data that's still valid
+    if (this.listCardsCache && (now - this.listCardsCache.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug('Using cached data for cards list');
+      return {
+        data: this.listCardsCache.data,
+        source: 'cache',
+        fetchTime: 0
+      };
+    }
+
+    // Cache miss or stale, fetch from API
+    this.logDebug('Fetching cards list from Metabase API (cache miss or stale)');
+    const startTime = Date.now();
+
+    try {
+      const cards = await this.request<any[]>('/api/card');
+      const fetchTime = Date.now() - startTime;
+
+      // Cache the result
+      this.listCardsCache = {
+        data: cards,
+        timestamp: now
+      };
+
+      this.logInfo(`Successfully fetched cards list in ${fetchTime}ms`);
+      return {
+        data: cards,
+        source: 'api',
+        fetchTime
+      };
+    } catch (error) {
+      this.logError('Failed to fetch cards list from Metabase API', error);
+
+      // If we have stale cached data, return it as fallback
+      if (this.listCardsCache) {
+        this.logWarn('Using stale cached data for cards list as fallback due to API error');
+        return {
+          data: this.listCardsCache.data,
+          source: 'cache',
+          fetchTime: 0
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get list of dashboards with caching
+   */
+  async getDashboardsList(): Promise<CachedResponse<any[]>> {
+    const now = Date.now();
+
+    // Check if we have cached data that's still valid
+    if (this.listDashboardsCache && (now - this.listDashboardsCache.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug('Using cached data for dashboards list');
+      return {
+        data: this.listDashboardsCache.data,
+        source: 'cache',
+        fetchTime: 0
+      };
+    }
+
+    // Cache miss or stale, fetch from API
+    this.logDebug('Fetching dashboards list from Metabase API (cache miss or stale)');
+    const startTime = Date.now();
+
+    try {
+      const dashboards = await this.request<any[]>('/api/dashboard');
+      const fetchTime = Date.now() - startTime;
+
+      // Cache the result
+      this.listDashboardsCache = {
+        data: dashboards,
+        timestamp: now
+      };
+
+      this.logInfo(`Successfully fetched dashboards list in ${fetchTime}ms`);
+      return {
+        data: dashboards,
+        source: 'api',
+        fetchTime
+      };
+    } catch (error) {
+      this.logError('Failed to fetch dashboards list from Metabase API', error);
+
+      // If we have stale cached data, return it as fallback
+      if (this.listDashboardsCache) {
+        this.logWarn('Using stale cached data for dashboards list as fallback due to API error');
+        return {
+          data: this.listDashboardsCache.data,
+          source: 'cache',
+          fetchTime: 0
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get list of tables with caching
+   */
+  async getTablesList(): Promise<CachedResponse<any[]>> {
+    const now = Date.now();
+
+    // Check if we have cached data that's still valid
+    if (this.listTablesCache && (now - this.listTablesCache.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug('Using cached data for tables list');
+      return {
+        data: this.listTablesCache.data,
+        source: 'cache',
+        fetchTime: 0
+      };
+    }
+
+    // Cache miss or stale, fetch from API
+    this.logDebug('Fetching tables list from Metabase API (cache miss or stale)');
+    const startTime = Date.now();
+
+    try {
+      const tables = await this.request<any[]>('/api/table');
+      const fetchTime = Date.now() - startTime;
+
+      // Cache the result
+      this.listTablesCache = {
+        data: tables,
+        timestamp: now
+      };
+
+      this.logInfo(`Successfully fetched tables list in ${fetchTime}ms`);
+      return {
+        data: tables,
+        source: 'api',
+        fetchTime
+      };
+    } catch (error) {
+      this.logError('Failed to fetch tables list from Metabase API', error);
+
+      // If we have stale cached data, return it as fallback
+      if (this.listTablesCache) {
+        this.logWarn('Using stale cached data for tables list as fallback due to API error');
+        return {
+          data: this.listTablesCache.data,
+          source: 'cache',
+          fetchTime: 0
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get list of databases with caching
+   */
+  async getDatabasesList(): Promise<CachedResponse<any[]>> {
+    const now = Date.now();
+
+    // Check if we have cached data that's still valid
+    if (this.listDatabasesCache && (now - this.listDatabasesCache.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug('Using cached data for databases list');
+      return {
+        data: this.listDatabasesCache.data,
+        source: 'cache',
+        fetchTime: 0
+      };
+    }
+
+    // Cache miss or stale, fetch from API
+    this.logDebug('Fetching databases list from Metabase API (cache miss or stale)');
+    const startTime = Date.now();
+
+    try {
+      const response = await this.request<any>('/api/database');
+      const fetchTime = Date.now() - startTime;
+
+      // Database endpoint returns { data: [...], total: number } structure
+      const databasesArray = response.data || [];
+
+      // Cache the result
+      this.listDatabasesCache = {
+        data: databasesArray,
+        timestamp: now
+      };
+
+      this.logInfo(`Successfully fetched databases list in ${fetchTime}ms (${databasesArray.length} databases)`);
+      return {
+        data: databasesArray,
+        source: 'api',
+        fetchTime
+      };
+    } catch (error) {
+      this.logError('Failed to fetch databases list from Metabase API', error);
+
+      // If we have stale cached data, return it as fallback
+      if (this.listDatabasesCache) {
+        this.logWarn('Using stale cached data for databases list as fallback due to API error');
+        return {
+          data: this.listDatabasesCache.data,
+          source: 'cache',
+          fetchTime: 0
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get list of collections with caching
+   */
+  async getCollectionsList(): Promise<CachedResponse<any[]>> {
+    const now = Date.now();
+
+    // Check if we have cached data that's still valid
+    if (this.listCollectionsCache && (now - this.listCollectionsCache.timestamp) < this.CACHE_TTL_MS) {
+      this.logDebug('Using cached data for collections list');
+      return {
+        data: this.listCollectionsCache.data,
+        source: 'cache',
+        fetchTime: 0
+      };
+    }
+
+    // Cache miss or stale, fetch from API
+    this.logDebug('Fetching collections list from Metabase API (cache miss or stale)');
+    const startTime = Date.now();
+
+    try {
+      const collections = await this.request<any[]>('/api/collection');
+      const fetchTime = Date.now() - startTime;
+
+      // Cache the result
+      this.listCollectionsCache = {
+        data: collections,
+        timestamp: now
+      };
+
+      this.logInfo(`Successfully fetched collections list in ${fetchTime}ms`);
+      return {
+        data: collections,
+        source: 'api',
+        fetchTime
+      };
+    } catch (error) {
+      this.logError('Failed to fetch collections list from Metabase API', error);
+
+      // If we have stale cached data, return it as fallback
+      if (this.listCollectionsCache) {
+        this.logWarn('Using stale cached data for collections list as fallback due to API error');
+        return {
+          data: this.listCollectionsCache.data,
+          source: 'cache',
+          fetchTime: 0
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Clear list caches
+   */
+  clearListCaches(): void {
+    this.listCardsCache = null;
+    this.listDashboardsCache = null;
+    this.listTablesCache = null;
+    this.listDatabasesCache = null;
+    this.listCollectionsCache = null;
+    this.logInfo('All list caches cleared');
+  }
+
+  /**
+   * Clear all caches (individual items and lists)
    */
   clearAllCache(): void {
     this.clearCardsCache();
@@ -300,7 +587,8 @@ export class MetabaseApiClient {
     this.clearDatabasesCache();
     this.clearCollectionsCache();
     this.clearFieldsCache();
-    this.logInfo('All caches cleared (cards, dashboards, tables, databases, collections, and fields)');
+    this.clearListCaches();
+    this.logInfo('All caches cleared (individual items and lists)');
   }
 
 

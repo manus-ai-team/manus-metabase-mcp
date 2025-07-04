@@ -1,4 +1,4 @@
-export { handleListDatabases } from './listDatabases.js';
+export { handleList } from './list/index.js';
 export { handleExecuteQuery } from './executeQuery.js';
 export { handleSearch } from './search.js';
 export { handleExportQuery } from './exportQuery.js';

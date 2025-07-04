@@ -20,7 +20,7 @@ import {
 } from './types/core.js';
 import { MetabaseApiClient } from './api.js';
 import {
-  handleListDatabases,
+  handleList,
   handleExecuteQuery,
   handleSearch,
   handleExportQuery,
@@ -365,12 +365,20 @@ export class MetabaseServer {
               required: ['model', 'ids']
             }
           },
+
           {
-            name: 'list_databases',
-            description: '[FAST] List all databases in Metabase',
+            name: 'list',
+            description: '[RECOMMENDED] Fetch ALL records for a single Metabase resource type with highly optimized responses for overview purposes. Retrieves complete lists of cards, dashboards, tables, databases, or collections. Returns only essential identifier fields for efficient browsing and includes intelligent caching for performance.',
             inputSchema: {
               type: 'object',
-              properties: {}
+              properties: {
+                model: {
+                  type: 'string',
+                  enum: ['cards', 'dashboards', 'tables', 'databases', 'collections'],
+                  description: 'Model type to list ALL records for. Supported models: cards (all questions/queries), dashboards (all dashboards), tables (all database tables), databases (all connected databases), collections (all folders/collections). Only one model type allowed per request for optimal performance.'
+                }
+              },
+              required: ['model']
             }
           },
           {
@@ -474,8 +482,8 @@ export class MetabaseServer {
         case 'search':
           return handleSearch(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
 
-        case 'list_databases':
-          return handleListDatabases(this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logError.bind(this));
+        case 'list':
+          return handleList(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));
 
         case 'execute_query':
           return handleExecuteQuery(request, requestId, this.apiClient, this.logDebug.bind(this), this.logInfo.bind(this), this.logWarn.bind(this), this.logError.bind(this));

@@ -67,7 +67,7 @@ export function handleClearCache(
     case 'all':
     default:
       apiClient.clearAllCache();
-      message = 'All caches cleared successfully (cards, dashboards, tables, databases, collections, and fields)';
+      message = 'All caches cleared successfully (individual items and lists for cards, dashboards, tables, databases, collections, and fields)';
       cacheStatus = 'all_caches_empty';
       break;
     }
