@@ -15,9 +15,9 @@
     "build"
   ],
   "scripts": {
-    "build": "npm run validate && npm test && tsc && node -e \"require('fs').chmodSync('build/src/index.js', '755')\" && mkdir -p dist && cp -r build/* dist/",
+    "build": "npm run validate && tsc && npm test && node -e \"require('fs').chmodSync('build/src/index.js', '755')\" && mkdir -p dist && cp -r build/* dist/",
     "build:clean": "rm -rf build dist && npm run build",
-    "build:fast": "tsc && (test -f build/src/index.js && node -e \"require('fs').chmodSync('build/src/index.js', '755')\" || true) && mkdir -p dist && cp -r build/* dist/",
+    "build:fast": "tsc && node -e \"require('fs').chmodSync('build/src/index.js', '755')\" && mkdir -p dist && cp -r build/* dist/",
     "prepare": "npm run build:fast && husky install",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/src/index.js",

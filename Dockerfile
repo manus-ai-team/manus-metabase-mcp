@@ -27,8 +27,8 @@ COPY . .
 # Run comprehensive tests during build
 RUN npm run test:coverage
 
-# Build the TypeScript project (includes validation and testing)
-RUN npm run build
+# Build the TypeScript project (without running tests again)
+RUN npm run build:fast
 
 # Set appropriate permissions for the executable
 RUN chmod +x build/src/index.js
