@@ -24,11 +24,14 @@ RUN npm config set ignore-scripts false
 # Copy application code
 COPY . .
 
-# Build the TypeScript project
+# Run comprehensive tests during build
+RUN npm run test:coverage
+
+# Build the TypeScript project (includes validation and testing)
 RUN npm run build
 
 # Set appropriate permissions for the executable
-RUN chmod +x build/index.js
+RUN chmod +x build/src/index.js
 
 # Default environment variables
 ENV NODE_ENV=production \
@@ -48,7 +51,7 @@ ENV NODE_ENV=production \
 USER node
 
 # Run the server
-CMD ["node", "build/index.js"]
+CMD ["node", "build/src/index.js"]
 
 # Stage 2: Runtime
 FROM node:lts-alpine
@@ -65,4 +68,4 @@ COPY --from=builder /usr/src/app/build ./build
 ENV NODE_ENV=production
 USER node
 
-CMD ["node", "build/index.js"]
+CMD ["node", "build/src/index.js"]

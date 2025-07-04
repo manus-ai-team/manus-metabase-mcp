@@ -9,27 +9,31 @@
     "url": "https://github.com/jerichosequitin"
   },
   "bin": {
-    "metabase-mcp": "./build/index.js"
+    "metabase-mcp": "./build/src/index.js"
   },
   "files": [
     "build"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\" && mkdir -p dist && cp -r build/* dist/",
+    "build": "npm run validate && npm test && tsc && node -e \"require('fs').chmodSync('build/src/index.js', '755')\" && mkdir -p dist && cp -r build/* dist/",
     "build:clean": "rm -rf build dist && npm run build",
-    "prepare": "npm run build",
+    "build:fast": "tsc && (test -f build/src/index.js && node -e \"require('fs').chmodSync('build/src/index.js', '755')\" || true) && mkdir -p dist && cp -r build/* dist/",
+    "prepare": "npm run build:fast && husky install",
     "watch": "tsc --watch",
-    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "start": "node build/index.js",
-    "dev": "tsc && node build/index.js",
-    "dev:watch": "npm run build && concurrently \"tsc --watch\" \"nodemon --delay 2 build/index.js\"",
+    "inspector": "npx @modelcontextprotocol/inspector build/src/index.js",
+    "start": "node build/src/index.js",
+    "dev": "tsc && node build/src/index.js",
+    "dev:watch": "npm run build && concurrently \"tsc --watch\" \"nodemon --delay 2 build/src/index.js\"",
     "lint": "eslint --ext .ts src/",
     "lint:fix": "eslint --ext .ts src/ --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
     "validate": "npm run type-check && npm run lint && npm run format:check",
-    "test": "echo \"No tests specified\" && exit 0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:all": "./scripts/test-all.sh",
     "clean": "rm -rf build dist node_modules/.cache"
   },
   "dependencies": {
@@ -41,11 +45,14 @@
     "@types/node": "^20.17.22",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
+    "@vitest/coverage-v8": "^2.0.5",
     "concurrently": "^8.2.2",
     "eslint": "^8.57.0",
+    "husky": "^9.0.11",
     "nodemon": "^3.0.2",
     "prettier": "^3.2.5",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^2.0.5"
   },
   "keywords": [
     "metabase",

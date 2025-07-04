@@ -354,6 +354,66 @@ docker run -e METABASE_URL=https://metabase.example.com \
            metabase-mcp
 ```
 
+## Testing
+
+### Comprehensive Test Suite
+
+The project includes a robust testing framework with **119 comprehensive unit tests** covering all MCP commands and edge cases:
+
+#### Test Coverage by Handler
+- **clearCache**: 32 tests - Parameter validation, cache operations, response formatting
+- **executeQuery**: 17 tests - SQL execution, parameter handling, row limits, query processing
+- **exportQuery**: 13 tests - Format support (CSV/JSON/XLSX), file operations, validation
+- **list**: 18 tests - All model types, caching, error handling, empty results
+- **retrieve**: 18 tests - Multi-entity support, batch operations, cache behavior
+- **search**: 21 tests - Advanced search parameters, model restrictions, query combinations
+
+#### Quality Assurance Features
+- **80% Coverage Threshold**: Enforced via Vitest configuration
+- **Parameter Validation**: Comprehensive testing of all input validation
+- **Error Scenarios**: Complete coverage of error conditions and edge cases
+- **Mock Infrastructure**: Sophisticated API client and environment mocking
+- **Cache Testing**: Verification of cache behavior and performance metrics
+- **TypeScript Compliance**: Full type safety validation
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run comprehensive test suite with quality checks
+npm run test:all
+
+# Run the full quality assurance pipeline
+./scripts/test-all.sh
+```
+
+### Test Infrastructure
+
+The testing setup includes:
+- **Vitest**: Modern testing framework with TypeScript support
+- **Mock API Client**: Complete Metabase API simulation
+- **Test Data**: Comprehensive sample data for all entity types
+- **Environment Mocking**: Isolated test environment configuration
+- **Coverage Analysis**: Detailed coverage reports with HTML output
+- **CI Integration**: Automated testing across Node.js versions (18.x, 20.x, 22.x)
+
+### GitHub Actions Integration
+
+Automated testing runs on:
+- **Push/PR Events**: Comprehensive test suite execution
+- **Multi-Node Testing**: Parallel testing across Node.js versions
+- **Quality Gates**: Type checking, linting, formatting, and coverage validation
+- **Docker Testing**: Container build and startup verification
+- **Performance Monitoring**: Test execution time and coverage metrics
+
 ## Development Improvements
 
 ### Enhanced Development Experience
