@@ -1,0 +1,8 @@
+build/
+dist/
+node_modules/
+*.lock
+*.log
+.env*
+README.md
+package-lock.json

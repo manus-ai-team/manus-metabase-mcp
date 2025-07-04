@@ -1,5 +1,5 @@
 {
-  "name": "@jericho/metabase-mcp-server",
+  "name": "@jericho/metabase-mcp",
   "version": "0.2.0",
   "description": "A custom Model Context Protocol server for Metabase integration - Jericho's version",
   "private": true,
@@ -9,22 +9,28 @@
     "url": "https://github.com/jerichosequitin"
   },
   "bin": {
-    "metabase-mcp-server": "./build/index.js"
+    "metabase-mcp": "./build/index.js"
   },
   "files": [
     "build"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\" && mkdir -p dist && cp build/index.js dist/index.js",
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\" && mkdir -p dist && cp -r build/* dist/",
+    "build:clean": "rm -rf build dist && npm run build",
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "start": "node build/index.js",
     "dev": "tsc && node build/index.js",
+    "dev:watch": "npm run build && concurrently \"tsc --watch\" \"nodemon --delay 2 build/index.js\"",
     "lint": "eslint --ext .ts src/",
     "lint:fix": "eslint --ext .ts src/ --fix",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "echo \"No tests specified\" && exit 0"
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "type-check": "tsc --noEmit",
+    "validate": "npm run type-check && npm run lint && npm run format:check",
+    "test": "echo \"No tests specified\" && exit 0",
+    "clean": "rm -rf build dist node_modules/.cache"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.1",
@@ -33,11 +39,13 @@
   },
   "devDependencies": {
     "@types/node": "^20.17.22",
-    "typescript": "^5.3.3",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "concurrently": "^8.2.2",
     "eslint": "^8.57.0",
-    "@typescript-eslint/eslint-plugin": "^7.1.0",
-    "@typescript-eslint/parser": "^7.1.0",
-    "prettier": "^3.2.5"
+    "nodemon": "^3.0.2",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3"
   },
   "keywords": [
     "metabase",
