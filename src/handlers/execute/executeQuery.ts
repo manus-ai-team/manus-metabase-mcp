@@ -1,45 +1,17 @@
-import { z } from 'zod';
-import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { MetabaseApiClient } from '../api.js';
-import { ErrorCode, McpError } from '../types/core.js';
-import { handleApiError } from '../utils.js';
+import { MetabaseApiClient } from '../../api.js';
+import { handleApiError } from '../../utils.js';
+import { SqlExecutionParams, ExecutionResponse } from './types.js';
 
-export async function handleExecuteQuery(
-  request: z.infer<typeof CallToolRequestSchema>,
-  requestId: string,
+export async function executeSqlQuery(
+  params: SqlExecutionParams,
+  _requestId: string,
   apiClient: MetabaseApiClient,
   logDebug: (message: string, data?: unknown) => void,
   logInfo: (message: string, data?: unknown) => void,
-  logWarn: (message: string, data?: unknown, error?: Error) => void,
+  _logWarn: (message: string, data?: unknown, error?: Error) => void,
   logError: (message: string, error: unknown) => void
-) {
-  const databaseId = request.params?.arguments?.database_id;
-  const query = request.params?.arguments?.query;
-  const nativeParameters = request.params?.arguments?.native_parameters || [];
-  const rowLimitArg = request.params?.arguments?.row_limit;
-  const rowLimit = typeof rowLimitArg === 'number' ? rowLimitArg : 500;
-
-  if (!databaseId) {
-    logWarn('Missing database_id parameter in execute_query request', { requestId });
-    throw new McpError(ErrorCode.InvalidParams, 'Database ID parameter is required');
-  }
-
-  if (!query || typeof query !== 'string') {
-    logWarn('Missing or invalid query parameter in execute_query request', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'SQL query parameter is required and must be a string'
-    );
-  }
-
-  // Validate row limit
-  if (rowLimit < 1 || rowLimit > 2000) {
-    logWarn(`Invalid row_limit parameter: ${rowLimit}. Must be between 1 and 2000.`, { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'Row limit must be between 1 and 2000. For larger datasets, use export_query instead.'
-    );
-  }
+): Promise<ExecutionResponse> {
+  const { databaseId, query, nativeParameters, rowLimit } = params;
 
   logDebug(`Executing SQL query against database ID: ${databaseId} with row limit: ${rowLimit}`);
 
@@ -107,6 +79,16 @@ export async function handleExecuteQuery(
       `Successfully executed SQL query against database: ${databaseId}, returned ${rowCount} rows (limit: ${finalLimit})`
     );
 
+    // Create optimized response with only essential data
+    const optimizedData = {
+      rows: response?.data?.rows || [],
+      cols: response?.data?.cols || [],
+      row_count: rowCount,
+      native_form: {
+        query: response?.data?.native_form?.query || limitedQuery,
+      },
+    };
+
     return {
       content: [
         {
@@ -118,7 +100,7 @@ export async function handleExecuteQuery(
               database_id: databaseId,
               row_count: rowCount,
               applied_limit: finalLimit,
-              data: response,
+              data: optimizedData,
             },
             null,
             2
