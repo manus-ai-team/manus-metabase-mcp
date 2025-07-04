@@ -1,5 +1,5 @@
 {
-  "name": "@jericho/metabase-mcp-server",
+  "name": "@jericho/metabase-mcp",
   "version": "0.2.0",
   "description": "A custom Model Context Protocol server for Metabase integration - Jericho's version",
   "private": true,
@@ -9,7 +9,7 @@
     "url": "https://github.com/jerichosequitin"
   },
   "bin": {
-    "metabase-mcp-server": "./build/index.js"
+    "metabase-mcp": "./build/index.js"
   },
   "files": [
     "build"

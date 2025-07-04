@@ -75,4 +75,4 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Build Docker image
-      run: docker build -t metabase-mcp-server .
+      run: docker build -t metabase-mcp .

@@ -177,8 +177,8 @@ To use with Claude Desktop, add this server configuration:
 ```json
 {
   "mcpServers": {
-    "metabase-mcp-server": {
-      "command": "/absolute/path/to/metabase-mcp-server/build/index.js",
+    "metabase-mcp": {
+      "command": "/absolute/path/to/metabase-mcp/build/index.js",
       "env": {
         "METABASE_URL": "https://your-metabase-instance.com",
         "METABASE_USER_EMAIL": "your_email@example.com",
@@ -336,20 +336,20 @@ The Inspector provides a browser-based interface for monitoring requests, respon
 
 ```bash
 # Build the Docker image
-docker build -t metabase-mcp-server .
+docker build -t metabase-mcp .
 
 # Run with API key authentication
 docker run -e METABASE_URL=https://metabase.example.com \
            -e METABASE_API_KEY=your_api_key \
            -e LOG_LEVEL=info \
-           metabase-mcp-server
+           metabase-mcp
 
 # Run with username/password authentication
 docker run -e METABASE_URL=https://metabase.example.com \
            -e METABASE_USER_EMAIL=user@example.com \
            -e METABASE_PASSWORD=password \
            -e LOG_LEVEL=info \
-           metabase-mcp-server
+           metabase-mcp
 ```
 
 ## Development Improvements
