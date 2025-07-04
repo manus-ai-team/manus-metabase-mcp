@@ -114,8 +114,8 @@ export async function handleExportQuery(
         // JSON export format might have different structures, let's be more flexible
         if (responseData && typeof responseData === 'object') {
           // Try different possible structures for row counting
-          rowCount = responseData?.data?.rows?.length ||
-                    responseData?.rows?.length ||
+          rowCount = responseData?.data?.rows?.length ??
+                    responseData?.rows?.length ??
                     (Array.isArray(responseData) ? responseData.length : 0);
         }
         logDebug(`JSON export row count: ${rowCount}`);
@@ -139,7 +139,7 @@ export async function handleExportQuery(
 
     // Validate that we have data before proceeding with file operations
     // For XLSX, check file size; for others, check row count
-    const hasData = format === 'xlsx' ? fileSize > 100 : (rowCount && rowCount > 0);
+    const hasData = format === 'xlsx' ? fileSize > 100 : (rowCount != null && rowCount > 0);
     if (!hasData) {
       logWarn(`Query returned no data for export`, { requestId });
       return {
