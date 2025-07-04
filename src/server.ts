@@ -130,16 +130,16 @@ export class MetabaseServer {
       await this.apiClient.getSessionToken();
 
       try {
-        // Get dashboard list
+        // Get dashboard list using caching method
         this.logDebug('Fetching dashboards from Metabase');
-        const dashboardsResponse = await this.apiClient.request<any[]>('/api/dashboard');
+        const dashboardsResponse = await this.apiClient.getDashboardsList();
 
-        const resourceCount = dashboardsResponse.length;
-        this.logInfo(`Successfully retrieved ${resourceCount} dashboards from Metabase`);
+        const resourceCount = dashboardsResponse.data.length;
+        this.logInfo(`Successfully retrieved ${resourceCount} dashboards from Metabase (source: ${dashboardsResponse.source})`);
 
         // Return dashboards as resources
         return {
-          resources: dashboardsResponse.map((dashboard: any) => ({
+          resources: dashboardsResponse.data.map((dashboard: any) => ({
             uri: `metabase://dashboard/${dashboard.id}`,
             mimeType: 'application/json',
             name: dashboard.name,
@@ -206,51 +206,51 @@ export class MetabaseServer {
       try {
         // Handle dashboard resource
         if ((match = uri.match(/^metabase:\/\/dashboard\/(\d+)$/))) {
-          const dashboardId = match[1];
+          const dashboardId = parseInt(match[1], 10);
           this.logDebug(`Fetching dashboard with ID: ${dashboardId}`);
 
-          const response = await this.apiClient.request<any>(`/api/dashboard/${dashboardId}`);
-          this.logInfo(`Successfully retrieved dashboard: ${response.name || dashboardId}`);
+          const response = await this.apiClient.getDashboard(dashboardId);
+          this.logInfo(`Successfully retrieved dashboard: ${response.data.name || dashboardId} (source: ${response.source})`);
 
           return {
             contents: [{
               uri: request.params?.uri,
               mimeType: 'application/json',
-              text: JSON.stringify(response, null, 2)
+              text: JSON.stringify(response.data, null, 2)
             }]
           };
         }
 
         // Handle question/card resource
         else if ((match = uri.match(/^metabase:\/\/card\/(\d+)$/))) {
-          const cardId = match[1];
+          const cardId = parseInt(match[1], 10);
           this.logDebug(`Fetching card/question with ID: ${cardId}`);
 
-          const response = await this.apiClient.request<any>(`/api/card/${cardId}`);
-          this.logInfo(`Successfully retrieved card: ${response.name || cardId}`);
+          const response = await this.apiClient.getCard(cardId);
+          this.logInfo(`Successfully retrieved card: ${response.data.name || cardId} (source: ${response.source})`);
 
           return {
             contents: [{
               uri: request.params?.uri,
               mimeType: 'application/json',
-              text: JSON.stringify(response, null, 2)
+              text: JSON.stringify(response.data, null, 2)
             }]
           };
         }
 
         // Handle database resource
         else if ((match = uri.match(/^metabase:\/\/database\/(\d+)$/))) {
-          const databaseId = match[1];
+          const databaseId = parseInt(match[1], 10);
           this.logDebug(`Fetching database with ID: ${databaseId}`);
 
-          const response = await this.apiClient.request<any>(`/api/database/${databaseId}`);
-          this.logInfo(`Successfully retrieved database: ${response.name || databaseId}`);
+          const response = await this.apiClient.getDatabase(databaseId);
+          this.logInfo(`Successfully retrieved database: ${response.data.name || databaseId} (source: ${response.source})`);
 
           return {
             contents: [{
               uri: request.params?.uri,
               mimeType: 'application/json',
-              text: JSON.stringify(response, null, 2)
+              text: JSON.stringify(response.data, null, 2)
             }]
           };
         }
