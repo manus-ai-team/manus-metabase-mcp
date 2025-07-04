@@ -1,5 +1,7 @@
 # Metabase MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@jerichosequitin/metabase-mcp)](https://smithery.ai/server/@jerichosequitin/metabase-mcp)
+
 **Author**: Jericho Sequitin (@jerichosequitin)
 
 A lightweight, enterprise-grade Model Context Protocol server designed for high-performance integration between AI assistants and Metabase analytics platforms. Built with intelligent caching, response optimization, and unified command architecture for production environments.
