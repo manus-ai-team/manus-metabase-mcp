@@ -42,6 +42,12 @@ jobs:
       run: npm test
 
     - name: Test MCP server can start
+      env:
+        METABASE_URL: "https://test.metabase.local"
+        METABASE_API_KEY: "test-api-key-for-ci"
+        METABASE_USER_EMAIL: "test@example.com"
+        METABASE_PASSWORD: "test-password"
+        NODE_ENV: "test"
       run: |
         if command -v timeout >/dev/null 2>&1; then
           timeout 10s node build/index.js || test $? = 124
