@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../api.js';
-import { ErrorCode, McpError } from '../types.js';
+import { ErrorCode, McpError } from '../types/core.js';
 import { handleApiError } from '../utils.js';
 import { config, authMethod, AuthMethod } from '../config.js';
 import { sanitizeFilename } from '../utils.js';

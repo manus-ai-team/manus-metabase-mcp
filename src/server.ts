@@ -17,7 +17,7 @@ import {
   ApiError,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
-} from './types.js';
+} from './types/core.js';
 import { MetabaseApiClient } from './api.js';
 import {
   handleListDatabases,

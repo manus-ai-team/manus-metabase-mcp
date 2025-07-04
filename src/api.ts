@@ -1,5 +1,5 @@
 import { config, AuthMethod } from './config.js';
-import { ErrorCode, McpError } from './types.js';
+import { ErrorCode, McpError } from './types/core.js';
 
 // Logger level enum
 enum LogLevel {
