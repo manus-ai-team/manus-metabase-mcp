@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../../api.js';
 import { ErrorCode, McpError } from '../../types/core.js';
+import { validateCardParameters } from '../../utils/parameterValidation.js';
 import { executeSqlQuery } from './executeQuery.js';
 import { executeCard } from './executeCard.js';
 import {
@@ -102,6 +103,11 @@ export async function handleExecute(
         ErrorCode.InvalidParams,
         'Row limit must be between 1 and 2000. For larger datasets, use export_query instead.'
       );
+    }
+
+    // Validate card parameters format if provided
+    if (cardParameters.length > 0) {
+      validateCardParameters(cardParameters, requestId, logWarn);
     }
 
     const cardParams: CardExecutionParams = {

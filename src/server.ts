@@ -18,8 +18,8 @@ import { MetabaseApiClient } from './api.js';
 import {
   handleList,
   handleExecute,
+  handleExport,
   handleSearch,
-  handleExportQuery,
   handleClearCache,
   handleRetrieve,
 } from './handlers/index.js';
@@ -423,8 +423,19 @@ export class MetabaseServer {
                 },
                 card_parameters: {
                   type: 'array',
-                  items: { type: 'object' },
-                  description: 'Parameters for card execution (card mode only)',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      slug: { type: 'string' },
+                      target: { type: 'array' },
+                      type: { type: 'string' },
+                      value: { type: ['string', 'number', 'boolean'] },
+                    },
+                    required: ['id', 'slug', 'target', 'type', 'value'],
+                  },
+                  description:
+                    'Parameters for filtering card results (card mode only). Each parameter must follow Metabase format: {id: "uuid", slug: "param_name", target: ["dimension", ["template-tag", "param_name"]], type: "param_type", value: "param_value"}',
                 },
                 row_limit: {
                   type: 'number',
@@ -448,19 +459,45 @@ export class MetabaseServer {
             },
           },
           {
-            name: 'export_query',
+            name: 'export',
             description:
-              '[ADVANCED] Export large SQL query results using Metabase export endpoints (supports up to 1M rows). Returns data in specified format (CSV, JSON, or XLSX) and automatically saves to Downloads/Metabase folder.',
+              '[ADVANCED] Export large SQL query results or saved cards using Metabase export endpoints (supports up to 1M rows). Returns data in specified format (CSV, JSON, or XLSX) and automatically saves to Downloads/Metabase folder.',
             inputSchema: {
               type: 'object',
               properties: {
                 database_id: {
                   type: 'number',
-                  description: 'ID of the database to query',
+                  description: 'Database ID to export query from (SQL mode only)',
                 },
                 query: {
                   type: 'string',
-                  description: 'SQL query to execute and export',
+                  description: 'SQL query to execute and export (SQL mode only)',
+                },
+                card_id: {
+                  type: 'number',
+                  description: 'ID of saved card to export (card mode only)',
+                },
+                native_parameters: {
+                  type: 'array',
+                  items: { type: 'object' },
+                  description:
+                    'Parameters for SQL template variables like {{variable_name}} (SQL mode only)',
+                },
+                card_parameters: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      slug: { type: 'string' },
+                      target: { type: 'array' },
+                      type: { type: 'string' },
+                      value: { type: ['string', 'number', 'boolean'] },
+                    },
+                    required: ['id', 'slug', 'target', 'type', 'value'],
+                  },
+                  description:
+                    'Parameters for filtering card results before export (card mode only). Each parameter must follow Metabase format: {id: "uuid", slug: "param_name", target: ["dimension", ["template-tag", "param_name"]], type: "param_type", value: "param_value"}',
                 },
                 format: {
                   type: 'string',
@@ -469,20 +506,23 @@ export class MetabaseServer {
                     'Export format: csv (text), json (structured data), or xlsx (Excel file)',
                   default: 'csv',
                 },
-                native_parameters: {
-                  type: 'array',
-                  description: 'Optional parameters for the query',
-                  items: {
-                    type: 'object',
-                  },
-                },
                 filename: {
                   type: 'string',
                   description:
                     'Custom filename (without extension) for the saved file. If not provided, a timestamp-based name will be used.',
                 },
               },
-              required: ['database_id', 'query'],
+              required: [],
+              oneOf: [
+                {
+                  required: ['database_id', 'query'],
+                  description: 'SQL mode: provide database_id and query',
+                },
+                {
+                  required: ['card_id'],
+                  description: 'Card mode: provide card_id',
+                },
+              ],
             },
           },
           {
@@ -567,8 +607,8 @@ export class MetabaseServer {
               this.logWarn.bind(this),
               this.logError.bind(this)
             );
-          case 'export_query':
-            return handleExportQuery(
+          case 'export':
+            return handleExport(
               request,
               requestId,
               this.apiClient,
