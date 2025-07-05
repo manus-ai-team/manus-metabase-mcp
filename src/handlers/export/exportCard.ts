@@ -1,7 +1,6 @@
 import { MetabaseApiClient } from '../../api.js';
-import { handleApiError } from '../../utils.js';
+import { handleApiError, sanitizeFilename } from '../../utils/index.js';
 import { config, authMethod, AuthMethod } from '../../config.js';
-import { sanitizeFilename } from '../../utils.js';
 import { CardExportParams, ExportResponse } from './types.js';
 import * as fs from 'fs';
 import * as path from 'path';

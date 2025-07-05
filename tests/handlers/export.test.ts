@@ -76,8 +76,11 @@ describe('handleExport (export command)', () => {
       ).rejects.toThrow(McpError);
 
       expect(mockLogger.logWarn).toHaveBeenCalledWith(
-        'Invalid format parameter in export request: invalid',
-        { requestId: 'test-request-id' }
+        'Invalid format parameter: invalid',
+        expect.objectContaining({ 
+          requestId: 'test-request-id',
+          validValues: expect.any(Array)
+        })
       );
     });
 
@@ -119,7 +122,10 @@ describe('handleExport (export command)', () => {
 
       expect(mockLogger.logWarn).toHaveBeenCalledWith(
         'Invalid card_id parameter - must be a positive number',
-        { requestId: 'test-request-id' }
+        expect.objectContaining({ 
+          requestId: 'test-request-id',
+          value: -1
+        })
       );
     });
 
@@ -133,7 +139,10 @@ describe('handleExport (export command)', () => {
 
       expect(mockLogger.logWarn).toHaveBeenCalledWith(
         'Invalid card_id parameter - must be a positive number',
-        { requestId: 'test-request-id' }
+        expect.objectContaining({ 
+          requestId: 'test-request-id',
+          value: 0
+        })
       );
     });
 
@@ -147,7 +156,10 @@ describe('handleExport (export command)', () => {
 
       expect(mockLogger.logWarn).toHaveBeenCalledWith(
         'Invalid database_id parameter - must be a positive number',
-        { requestId: 'test-request-id' }
+        expect.objectContaining({ 
+          requestId: 'test-request-id',
+          value: -1
+        })
       );
     });
 
@@ -161,7 +173,10 @@ describe('handleExport (export command)', () => {
 
       expect(mockLogger.logWarn).toHaveBeenCalledWith(
         'Invalid database_id parameter - must be a positive number',
-        { requestId: 'test-request-id' }
+        expect.objectContaining({ 
+          requestId: 'test-request-id',
+          value: 0
+        })
       );
     });
   });

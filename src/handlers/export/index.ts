@@ -2,7 +2,11 @@ import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../../api.js';
 import { ErrorCode, McpError } from '../../types/core.js';
-import { validateCardParameters } from '../../utils/parameterValidation.js';
+import {
+  validateCardParameters,
+  validatePositiveInteger,
+  validateEnumValue,
+} from '../../utils/index.js';
 import { exportSqlQuery } from './exportQuery.js';
 import { exportCard } from './exportCard.js';
 import { ExportRequest, SqlExportParams, CardExportParams, ExportResponse } from './types.js';
@@ -23,14 +27,14 @@ export async function handleExport(
   const cardId = args?.card_id;
   const nativeParameters = Array.isArray(args?.native_parameters) ? args.native_parameters : [];
   const cardParameters = Array.isArray(args?.card_parameters) ? args.card_parameters : [];
-  const format = (args?.format || 'csv').toLowerCase();
+  const format = validateEnumValue(
+    args?.format || 'csv',
+    ['csv', 'json', 'xlsx'] as const,
+    'format',
+    requestId,
+    logWarn
+  );
   const filename = args?.filename;
-
-  // Validate format
-  if (!['csv', 'json', 'xlsx'].includes(format)) {
-    logWarn(`Invalid format parameter in export request: ${format}`, { requestId });
-    throw new McpError(ErrorCode.InvalidParams, 'Format must be one of: csv, json, xlsx');
-  }
 
   // Validate that either query+database_id or card_id is provided (but not considering 0 as falsy for this check)
   if (cardId === undefined && databaseId === undefined) {
@@ -49,6 +53,14 @@ export async function handleExport(
       ErrorCode.InvalidParams,
       'Cannot specify both card_id and database_id - choose one export method'
     );
+  }
+
+  // Validate positive integer parameters
+  if (cardId !== undefined) {
+    validatePositiveInteger(cardId, 'card_id', requestId, logWarn);
+  }
+  if (databaseId !== undefined) {
+    validatePositiveInteger(databaseId, 'database_id', requestId, logWarn);
   }
 
   // Strict parameter validation for card export mode
@@ -90,15 +102,7 @@ export async function handleExport(
 
   // If exporting a card
   if (cardId !== undefined) {
-    if (typeof cardId !== 'number') {
-      logWarn('Invalid card_id parameter - must be a number', { requestId });
-      throw new McpError(ErrorCode.InvalidParams, 'Card ID must be a number');
-    }
-
-    if (cardId <= 0) {
-      logWarn('Invalid card_id parameter - must be a positive number', { requestId });
-      throw new McpError(ErrorCode.InvalidParams, 'Card ID must be a positive number');
-    }
+    validatePositiveInteger(cardId, 'card_id', requestId, logWarn);
 
     // Validate card parameters format if provided
     if (cardParameters.length > 0) {
@@ -124,15 +128,7 @@ export async function handleExport(
     );
   }
 
-  if (typeof databaseId !== 'number') {
-    logWarn('Invalid database_id parameter - must be a number', { requestId });
-    throw new McpError(ErrorCode.InvalidParams, 'Database ID must be a number');
-  }
-
-  if (databaseId <= 0) {
-    logWarn('Invalid database_id parameter - must be a positive number', { requestId });
-    throw new McpError(ErrorCode.InvalidParams, 'Database ID must be a positive number');
-  }
+  validatePositiveInteger(databaseId, 'database_id', requestId, logWarn);
 
   const sqlParams: SqlExportParams = {
     databaseId: databaseId as number,

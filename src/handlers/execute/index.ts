@@ -2,7 +2,11 @@ import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../../api.js';
 import { ErrorCode, McpError } from '../../types/core.js';
-import { validateCardParameters } from '../../utils/parameterValidation.js';
+import {
+  validateCardParameters,
+  validatePositiveInteger,
+  validateRowLimit,
+} from '../../utils/index.js';
 import { executeSqlQuery } from './executeQuery.js';
 import { executeCard } from './executeCard.js';
 import {
@@ -31,6 +35,16 @@ export async function handleExecute(
   const rowLimitArg = args?.row_limit;
   const rowLimit = typeof rowLimitArg === 'number' ? rowLimitArg : 500;
 
+  // First validate that parameter types are correct
+  if (cardId !== undefined && typeof cardId !== 'number') {
+    logWarn('Invalid card_id parameter - must be a number', { requestId });
+    throw new McpError(ErrorCode.InvalidParams, 'card_id parameter must be a number');
+  }
+  if (databaseId !== undefined && typeof databaseId !== 'number') {
+    logWarn('Invalid database_id parameter - must be a number', { requestId });
+    throw new McpError(ErrorCode.InvalidParams, 'database_id parameter must be a number');
+  }
+
   // Validate that either query+database_id or card_id is provided
   if (!cardId && !databaseId) {
     logWarn('Missing required parameters: either card_id or database_id must be provided', {
@@ -49,6 +63,15 @@ export async function handleExecute(
       'Cannot specify both card_id and database_id - choose one execution method'
     );
   }
+
+  // Validate positive integer parameters
+  if (cardId !== undefined) {
+    validatePositiveInteger(cardId, 'card_id', requestId, logWarn);
+  }
+  if (databaseId !== undefined) {
+    validatePositiveInteger(databaseId, 'database_id', requestId, logWarn);
+  }
+  validateRowLimit(rowLimit, 'row_limit', requestId, logWarn);
 
   // Strict parameter validation for card execution mode
   if (cardId) {
@@ -89,10 +112,7 @@ export async function handleExecute(
 
   // If executing a card
   if (cardId) {
-    if (typeof cardId !== 'number') {
-      logWarn('Invalid card_id parameter - must be a number', { requestId });
-      throw new McpError(ErrorCode.InvalidParams, 'Card ID must be a number');
-    }
+    validatePositiveInteger(cardId, 'card_id', requestId, logWarn);
 
     // Validate row limit for cards
     if (rowLimit < 1 || rowLimit > 2000) {

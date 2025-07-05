@@ -6,7 +6,7 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { LogLevel } from './config.js';
-import { generateRequestId } from './utils.js';
+import { generateRequestId } from './utils/index.js';
 import {
   ErrorCode,
   McpError,
@@ -280,7 +280,7 @@ export class MetabaseServer {
           {
             name: 'search',
             description:
-              '[RECOMMENDED] Search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, databases, and more. Use this FIRST for finding any Metabase content. Returns search metrics, recommendations, and clean results organized by model type.',
+              'Search across all Metabase items using native search API. Supports cards, dashboards, tables, collections, databases, and more. Use this first for finding any Metabase content. Returns search metrics, recommendations, and clean results organized by model type.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -354,7 +354,7 @@ export class MetabaseServer {
           {
             name: 'retrieve',
             description:
-              '[RECOMMENDED] Fetch additional details for supported models (Cards, Dashboards, Tables, Databases, Collections, Fields). Supports multiple IDs (max 50 per request) with intelligent concurrent processing and optimized caching.',
+              'Fetch additional details for supported models (Cards, Dashboards, Tables, Databases, Collections, Fields). Supports multiple IDs (max 50 per request) with intelligent concurrent processing and optimized caching.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -382,7 +382,7 @@ export class MetabaseServer {
           {
             name: 'list',
             description:
-              '[RECOMMENDED] Fetch ALL records for a single Metabase resource type with highly optimized responses for overview purposes. Retrieves complete lists of cards, dashboards, tables, databases, or collections. Returns only essential identifier fields for efficient browsing and includes intelligent caching for performance.',
+              'Fetch all records for a single Metabase resource type with highly optimized responses for overview purposes. Retrieves complete lists of cards, dashboards, tables, databases, or collections. Returns only essential identifier fields for efficient browsing and includes intelligent caching for performance.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -399,7 +399,7 @@ export class MetabaseServer {
           {
             name: 'execute',
             description:
-              'Execute SQL queries or run saved cards against Metabase databases. Use Card mode when existing cards have the needed filters. Use SQL mode for custom queries or when cards lack required filters.',
+              'Unified command to execute SQL queries or run saved cards against Metabase databases. Use Card mode when existing cards have the needed filters. Use SQL mode for custom queries or when cards lack required filters. Returns up to 2000 rows per request.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -461,7 +461,7 @@ export class MetabaseServer {
           {
             name: 'export',
             description:
-              '[ADVANCED] Export large SQL query results or saved cards using Metabase export endpoints (supports up to 1M rows). Returns data in specified format (CSV, JSON, or XLSX) and automatically saves to Downloads/Metabase folder.',
+              'Unified command to export large SQL query results or saved cards using Metabase export endpoints (supports up to 1M rows). Returns data in specified format (CSV, JSON, or XLSX) and automatically saves to Downloads/Metabase folder.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -528,7 +528,7 @@ export class MetabaseServer {
           {
             name: 'clear_cache',
             description:
-              '[UTILITY] Clear the internal cache for stored data. Useful for debugging or when you know the data has changed. Supports granular cache clearing for both individual items and list caches.',
+              'Clear the internal cache for stored data. Useful for debugging or when you know the data has changed. Supports granular cache clearing for both individual items and list caches.',
             inputSchema: {
               type: 'object',
               properties: {

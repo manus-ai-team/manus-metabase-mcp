@@ -1,4 +1,5 @@
 import { ErrorCode, McpError } from '../types/core.js';
+import { validateNonEmptyString } from './validation.js';
 
 export interface MetabaseCardParameter {
   id: string;
@@ -39,38 +40,19 @@ export function validateCardParameters(
       }
     }
 
-    // Validate field types
-    if (typeof param.id !== 'string' || param.id.trim() === '') {
-      logWarn(`Invalid 'id' field in ${paramIndex}: must be a non-empty string`, {
-        requestId,
-        param,
-      });
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `Card parameter at index ${i} has invalid 'id' field: must be a non-empty string`
-      );
-    }
-
-    if (typeof param.slug !== 'string' || param.slug.trim() === '') {
-      logWarn(`Invalid 'slug' field in ${paramIndex}: must be a non-empty string`, {
-        requestId,
-        param,
-      });
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `Card parameter at index ${i} has invalid 'slug' field: must be a non-empty string`
-      );
-    }
-
-    if (typeof param.type !== 'string' || param.type.trim() === '') {
-      logWarn(`Invalid 'type' field in ${paramIndex}: must be a non-empty string`, {
-        requestId,
-        param,
-      });
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `Card parameter at index ${i} has invalid 'type' field: must be a non-empty string`
-      );
+    // Validate field types using validation utilities
+    try {
+      validateNonEmptyString(param.id, `${paramIndex} 'id' field`, requestId, logWarn);
+      validateNonEmptyString(param.slug, `${paramIndex} 'slug' field`, requestId, logWarn);
+      validateNonEmptyString(param.type, `${paramIndex} 'type' field`, requestId, logWarn);
+    } catch (error) {
+      if (error instanceof McpError) {
+        throw new McpError(
+          error.code,
+          `Card parameter at index ${i} has invalid field: ${error.message}`
+        );
+      }
+      throw error;
     }
 
     // Validate target array structure
