@@ -17,7 +17,7 @@ import {
 import { MetabaseApiClient } from './api.js';
 import {
   handleList,
-  handleExecuteQuery,
+  handleExecute,
   handleSearch,
   handleExportQuery,
   handleClearCache,
@@ -397,36 +397,54 @@ export class MetabaseServer {
             },
           },
           {
-            name: 'execute_query',
+            name: 'execute',
             description:
-              '[RECOMMENDED] Execute a SQL query against a Metabase database. This is the preferred method for running queries as it provides better control and reliability. Results are limited to improve performance for AI agents - use export_query for larger datasets.',
+              'Execute SQL queries or run saved cards against Metabase databases. Use Card mode when existing cards have the needed filters. Use SQL mode for custom queries or when cards lack required filters.',
             inputSchema: {
               type: 'object',
               properties: {
                 database_id: {
                   type: 'number',
-                  description: 'ID of the database to query',
+                  description: 'Database ID to execute query against (SQL mode only)',
                 },
                 query: {
                   type: 'string',
-                  description:
-                    'SQL query to execute. You can modify card queries by getting them via retrieve first.',
+                  description: 'SQL query to execute (SQL mode only)',
+                },
+                card_id: {
+                  type: 'number',
+                  description: 'ID of saved card to execute (card mode only)',
                 },
                 native_parameters: {
                   type: 'array',
                   items: { type: 'object' },
-                  description: 'Optional parameters for the query',
+                  description:
+                    'Parameters for SQL template variables like {{variable_name}} (SQL mode only)',
+                },
+                card_parameters: {
+                  type: 'array',
+                  items: { type: 'object' },
+                  description: 'Parameters for card execution (card mode only)',
                 },
                 row_limit: {
                   type: 'number',
-                  description:
-                    'Maximum number of rows to return (default: 500, max: 2000). If the query has an existing LIMIT clause that is more restrictive (lower), the existing limit will be preserved. For larger datasets, use export_query instead.',
+                  description: 'Maximum number of rows to return (default: 500, max: 2000)',
                   default: 500,
                   minimum: 1,
                   maximum: 2000,
                 },
               },
-              required: ['database_id', 'query'],
+              required: [],
+              oneOf: [
+                {
+                  required: ['database_id', 'query'],
+                  description: 'SQL mode: provide database_id and query',
+                },
+                {
+                  required: ['card_id'],
+                  description: 'Card mode: provide card_id',
+                },
+              ],
             },
           },
           {
@@ -539,8 +557,8 @@ export class MetabaseServer {
               this.logError.bind(this)
             );
 
-          case 'execute_query':
-            return handleExecuteQuery(
+          case 'execute':
+            return handleExecute(
               request,
               requestId,
               this.apiClient,

@@ -1,5 +1,5 @@
 export { handleList } from './list/index.js';
-export { handleExecuteQuery } from './executeQuery.js';
+export { handleExecute } from './execute/index.js';
 export { handleSearch } from './search.js';
 export { handleExportQuery } from './exportQuery.js';
 export { handleClearCache } from './clearCache.js';

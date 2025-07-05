@@ -22,6 +22,9 @@ Each model has a standardized reference file: `{model}.json`
 - **collection.json** ✅ - Complete with optimization analysis (~15% token reduction)
 - **field.json** ✅ - Complete with optimization analysis (~75% token reduction)
 
+### Available Commands
+- **query.json** ✅ - SQL query and card execution optimizations (~85-90% token reduction)
+
 ## Reference File Format
 
 ```json
@@ -114,6 +117,8 @@ Current optimizations:
 - **Databases**: ~75% reduction (25,000+ → 6,000-7,500 chars)
 - **Collections**: ~15% reduction (2,500+ → 2,000 chars)
 - **Fields**: ~75% reduction (15,000+ → 3,000-4,000 chars)
+- **Execute (SQL)**: ~85-90% reduction (25,000-35,000+ → 2,000-3,000 chars)
+- **Execute (Card)**: Client-side row limiting prevents overwhelming responses
 - **Bulk requests**: Savings multiply by item count
 
 ## Implementation
@@ -136,7 +141,7 @@ Each optimization function:
 2. **Review optimizations** periodically for new use cases
 3. **Add new models** as they're supported (collection, field)
 4. **Keep notes** on why fields were kept/removed
-5. **Test optimizations** don't break execute_query, export_query operations
+5. **Test optimizations** don't break execute, export_query operations
 
 ## Example Usage
 
