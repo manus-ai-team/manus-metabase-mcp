@@ -423,17 +423,7 @@ export class MetabaseServer {
                 },
                 card_parameters: {
                   type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      id: { type: 'string' },
-                      slug: { type: 'string' },
-                      target: { type: 'array' },
-                      type: { type: 'string' },
-                      value: { type: ['string', 'number', 'boolean'] },
-                    },
-                    required: ['id', 'slug', 'target', 'type', 'value'],
-                  },
+                  items: { type: 'object' },
                   description:
                     'Parameters for filtering card results (card mode only). Each parameter must follow Metabase format: {id: "uuid", slug: "param_name", target: ["dimension", ["template-tag", "param_name"]], type: "param_type", value: "param_value"}',
                 },
@@ -446,16 +436,6 @@ export class MetabaseServer {
                 },
               },
               required: [],
-              oneOf: [
-                {
-                  required: ['database_id', 'query'],
-                  description: 'SQL mode: provide database_id and query',
-                },
-                {
-                  required: ['card_id'],
-                  description: 'Card mode: provide card_id',
-                },
-              ],
             },
           },
           {
@@ -485,17 +465,7 @@ export class MetabaseServer {
                 },
                 card_parameters: {
                   type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      id: { type: 'string' },
-                      slug: { type: 'string' },
-                      target: { type: 'array' },
-                      type: { type: 'string' },
-                      value: { type: ['string', 'number', 'boolean'] },
-                    },
-                    required: ['id', 'slug', 'target', 'type', 'value'],
-                  },
+                  items: { type: 'object' },
                   description:
                     'Parameters for filtering card results before export (card mode only). Each parameter must follow Metabase format: {id: "uuid", slug: "param_name", target: ["dimension", ["template-tag", "param_name"]], type: "param_type", value: "param_value"}',
                 },
@@ -513,16 +483,6 @@ export class MetabaseServer {
                 },
               },
               required: [],
-              oneOf: [
-                {
-                  required: ['database_id', 'query'],
-                  description: 'SQL mode: provide database_id and query',
-                },
-                {
-                  required: ['card_id'],
-                  description: 'Card mode: provide card_id',
-                },
-              ],
             },
           },
           {
