@@ -31,7 +31,7 @@
     "brace-style": ["error", "1tbs"],
     "comma-dangle": "off",
     "semi": ["error", "always"],
-    "quotes": ["error", "single", { "allowTemplateLiterals": true }],
+    "quotes": ["error", "single", { "allowTemplateLiterals": true, "avoidEscape": true }],
     "no-prototype-builtins": "off"
   },
   "ignorePatterns": ["build/", "dist/", "node_modules/", "*.js"]
