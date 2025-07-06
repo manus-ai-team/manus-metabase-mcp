@@ -83,13 +83,26 @@ export function optimizeCardResponse(card: any): OptimizedCard {
 
   // Essential parameters for query execution
   if (card.parameters && Array.isArray(card.parameters) && card.parameters.length > 0) {
-    optimized.parameters = card.parameters.map((param: any) => ({
-      id: param.id,
-      name: param.name,
-      type: param.type,
-      slug: param.slug,
-      target: param.target,
-    }));
+    optimized.parameters = card.parameters.map((param: any) => {
+      const optimizedParam: any = {
+        id: param.id,
+        name: param.name,
+        type: param.type,
+        slug: param.slug,
+        target: param.target,
+      };
+
+      // Include values source information for parameters with static lists
+      if (param.values_source_type) {
+        optimizedParam.values_source_type = param.values_source_type;
+      }
+
+      if (param.values_source_config) {
+        optimizedParam.values_source_config = param.values_source_config;
+      }
+
+      return optimizedParam;
+    });
   }
 
   // Analytics data for future use
@@ -215,13 +228,26 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
           Array.isArray(dashcard.card.parameters) &&
           dashcard.card.parameters.length > 0
         ) {
-          optimizedDashcard.card.parameters = dashcard.card.parameters.map((param: any) => ({
-            id: param.id,
-            name: param.name,
-            type: param.type,
-            slug: param.slug,
-            target: param.target,
-          }));
+          optimizedDashcard.card.parameters = dashcard.card.parameters.map((param: any) => {
+            const optimizedParam: any = {
+              id: param.id,
+              name: param.name,
+              type: param.type,
+              slug: param.slug,
+              target: param.target,
+            };
+
+            // Include values source information for parameters with static lists
+            if (param.values_source_type) {
+              optimizedParam.values_source_type = param.values_source_type;
+            }
+
+            if (param.values_source_config) {
+              optimizedParam.values_source_config = param.values_source_config;
+            }
+
+            return optimizedParam;
+          });
         }
       }
 
@@ -235,13 +261,26 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
     Array.isArray(dashboard.parameters) &&
     dashboard.parameters.length > 0
   ) {
-    optimized.parameters = dashboard.parameters.map((param: any) => ({
-      id: param.id,
-      name: param.name,
-      type: param.type,
-      slug: param.slug,
-      sectionId: param.sectionId,
-    }));
+    optimized.parameters = dashboard.parameters.map((param: any) => {
+      const optimizedParam: any = {
+        id: param.id,
+        name: param.name,
+        type: param.type,
+        slug: param.slug,
+        sectionId: param.sectionId,
+      };
+
+      // Include values source information for parameters with static lists
+      if (param.values_source_type) {
+        optimizedParam.values_source_type = param.values_source_type;
+      }
+
+      if (param.values_source_config) {
+        optimizedParam.values_source_config = param.values_source_config;
+      }
+
+      return optimizedParam;
+    });
   }
 
   // Dashboard tabs (if any)

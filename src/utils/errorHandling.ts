@@ -100,6 +100,13 @@ function getStatusCodeMessage(statusCode: string, context: ErrorContext): string
   switch (statusCode) {
     case '400':
       if (resourceType && resourceId) {
+        if (
+          resourceType === 'card' &&
+          (operation.toLowerCase().includes('execute') ||
+            operation.toLowerCase().includes('export'))
+        ) {
+          return `Invalid ${resourceType}_id parameter or card configuration issue. Ensure the ${resourceType} ID is valid and exists. If parameter issues persist, consider using ${operation.toLowerCase().includes('execute') ? 'execute_query' : 'export_query'} with the card's underlying SQL query instead.`;
+        }
         return `Invalid ${resourceType}_id parameter. Ensure the ${resourceType} ID is valid and exists.`;
       }
       return `Invalid parameters or request format. Check your input parameters.`;
@@ -115,6 +122,13 @@ function getStatusCodeMessage(statusCode: string, context: ErrorContext): string
 
     case '404':
       if (resourceType && resourceId) {
+        if (
+          resourceType === 'card' &&
+          (operation.toLowerCase().includes('execute') ||
+            operation.toLowerCase().includes('export'))
+        ) {
+          return `${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} not found. Check that the ${resourceType}_id (${resourceId}) is correct and the ${resourceType} exists. Alternatively, use ${operation.toLowerCase().includes('execute') ? 'execute_query' : 'export_query'} to run the SQL query directly against the database.`;
+        }
         return `${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} not found. Check that the ${resourceType}_id (${resourceId}) is correct and the ${resourceType} exists.`;
       }
       if (resourceType) {
@@ -130,6 +144,13 @@ function getStatusCodeMessage(statusCode: string, context: ErrorContext): string
         operation.toLowerCase().includes('query') ||
         operation.toLowerCase().includes('execute')
       ) {
+        if (
+          resourceType === 'card' &&
+          (operation.toLowerCase().includes('execute') ||
+            operation.toLowerCase().includes('export'))
+        ) {
+          return `Database server error. The query may have caused a timeout or database issue. Try using ${operation.toLowerCase().includes('execute') ? 'execute_query' : 'export_query'} with the card's SQL query for better error handling and debugging capabilities.`;
+        }
         return `Database server error. The query may have caused a timeout or database issue.`;
       }
       return `Metabase server error. The server may be experiencing issues.`;

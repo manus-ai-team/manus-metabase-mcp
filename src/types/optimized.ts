@@ -43,6 +43,10 @@ export interface OptimizedCard {
     type: string;
     slug: string;
     target?: any;
+    values_source_type?: string;
+    values_source_config?: {
+      values?: string[];
+    };
   }>;
   view_count?: number;
   query_average_duration?: number;
@@ -96,6 +100,10 @@ export interface OptimizedDashboard {
         type: string;
         slug: string;
         target?: any;
+        values_source_type?: string;
+        values_source_config?: {
+          values?: string[];
+        };
       }>;
     };
   }>;
@@ -105,6 +113,10 @@ export interface OptimizedDashboard {
     type: string;
     slug: string;
     sectionId?: string;
+    values_source_type?: string;
+    values_source_config?: {
+      values?: string[];
+    };
   }>;
   tabs?: Array<any>;
   width?: string;

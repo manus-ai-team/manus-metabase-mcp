@@ -179,6 +179,61 @@ describe('handleRetrieve', () => {
       expect(result.content[0].text).toContain('failed_retrievals');
       expect(result.content[0].text).toContain('1/2 cards successfully');
     });
+
+    it('should include values_source_type and values_source_config in card parameters', async () => {
+      const cardWithParameters = {
+        ...sampleCard,
+        parameters: [
+          {
+            id: 'param1',
+            name: 'Test Parameter',
+            type: 'category',
+            slug: 'test_param',
+            target: ['dimension', ['template-tag', 'test_param']],
+            values_source_type: 'static-list',
+            values_source_config: {
+              values: ['option1', 'option2', 'option3']
+            }
+          },
+          {
+            id: 'param2',
+            name: 'Simple Parameter',
+            type: 'text',
+            slug: 'simple_param',
+            target: ['dimension', ['template-tag', 'simple_param']]
+            // No values_source_type or values_source_config
+          }
+        ]
+      };
+      
+      mockApiClient.getCard.mockResolvedValue(createCachedResponse(cardWithParameters));
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const request = createMockRequest('retrieve', { model: 'card', ids: [1] });
+      const result = await handleRetrieve(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError);
+
+      expect(result.content).toHaveLength(1);
+      const responseData = JSON.parse(result.content[0].text);
+      
+      // Check that optimized card includes parameters
+      expect(responseData.results).toHaveLength(1);
+      const optimizedCard = responseData.results[0];
+      expect(optimizedCard.parameters).toHaveLength(2);
+      
+      // Check first parameter has values source information
+      const param1 = optimizedCard.parameters.find((p: any) => p.id === 'param1');
+      expect(param1).toBeDefined();
+      expect(param1.values_source_type).toBe('static-list');
+      expect(param1.values_source_config).toEqual({
+        values: ['option1', 'option2', 'option3']
+      });
+      
+      // Check second parameter doesn't have values source information
+      const param2 = optimizedCard.parameters.find((p: any) => p.id === 'param2');
+      expect(param2).toBeDefined();
+      expect(param2.values_source_type).toBeUndefined();
+      expect(param2.values_source_config).toBeUndefined();
+    });
   });
 
   describe('Database retrieval', () => {

@@ -106,7 +106,15 @@ export async function handleExport(
 
     // Validate card parameters format if provided
     if (cardParameters.length > 0) {
-      validateCardParameters(cardParameters, requestId, logWarn);
+      try {
+        validateCardParameters(cardParameters, requestId, logWarn);
+      } catch (error) {
+        logWarn(`Card parameter validation failed for card ${cardId}`, { error, requestId });
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Invalid card parameters format. If parameter issues persist, consider using export_query with the card's underlying SQL query instead, which provides more reliable parameter handling. Original error: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     }
 
     const cardParams: CardExportParams = {

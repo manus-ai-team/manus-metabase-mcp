@@ -317,10 +317,13 @@ export async function exportCard(
         resourceId: cardId,
         customMessages: {
           '400':
-            'Invalid card parameters or export format issue. Ensure format is csv, json, or xlsx.',
-          '404': 'Card not found or not accessible.',
-          '413': 'Export payload too large. Try reducing the result set size or use query filters.',
-          '500': 'Server error. The card may have caused a timeout or database issue.',
+            "Invalid card parameters or export format issue. Ensure format is csv, json, or xlsx. If parameter issues persist, consider using export_query with the card's underlying SQL query instead, which provides more reliable parameter handling and validation.",
+          '404':
+            'Card not found or not accessible. Alternatively, use export_query to export the SQL query results directly from the database.',
+          '413':
+            'Export payload too large. Try reducing the result set size or use query filters. Consider using export_query with LIMIT clauses for better control over result size.',
+          '500':
+            "Server error. The card may have caused a timeout or database issue. Try using export_query with the card's SQL query for better error handling and timeout control.",
         },
       },
       logError
