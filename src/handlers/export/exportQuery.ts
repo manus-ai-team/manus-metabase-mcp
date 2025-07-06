@@ -1,10 +1,83 @@
 import { MetabaseApiClient } from '../../api.js';
-import { handleApiError, sanitizeFilename } from '../../utils/index.js';
+import { handleApiError, sanitizeFilename, analyzeXlsxContent } from '../../utils/index.js';
 import { config, authMethod, AuthMethod } from '../../config.js';
+import * as XLSX from 'xlsx';
 import { SqlExportParams, ExportResponse } from './types.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+
+/**
+ * Extract first 5 rows preview in standardized JSON format from export data
+ */
+function extractPreviewData(responseData: any, format: string): any[] {
+  try {
+    if (format === 'json') {
+      // Handle different JSON response structures
+      let rows: any[] = [];
+
+      if (responseData?.data?.rows) {
+        rows = responseData.data.rows;
+      } else if (responseData?.rows) {
+        rows = responseData.rows;
+      } else if (Array.isArray(responseData)) {
+        rows = responseData;
+      }
+
+      // Take first 5 rows
+      return rows.slice(0, 5);
+    } else if (format === 'csv') {
+      // Parse CSV to get first 5 data rows
+      const lines = responseData.split('\n').filter((line: string) => line.trim());
+      if (lines.length <= 1) {
+        return []; // No data rows (just header or empty)
+      }
+
+      const header = lines[0].split(',').map((col: string) => col.trim().replace(/^"|"$/g, ''));
+      const dataRows = lines.slice(1, 6); // Take first 5 data rows
+
+      return dataRows.map((row: string) => {
+        const values = row.split(',').map((val: string) => val.trim().replace(/^"|"$/g, ''));
+        const rowObj: any = {};
+        header.forEach((col: string, index: number) => {
+          rowObj[col] = values[index] || null;
+        });
+        return rowObj;
+      });
+    } else if (format === 'xlsx') {
+      // Parse XLSX ArrayBuffer to extract preview data
+      const workbook = XLSX.read(responseData);
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return [];
+      }
+
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      // Skip header row and take first 5 data rows
+      const dataRows = jsonData.slice(1, 6);
+      if (jsonData.length === 0 || dataRows.length === 0) {
+        return [];
+      }
+
+      // Convert to objects using header row
+      const headers = jsonData[0] as string[];
+      return dataRows.map((row: any) => {
+        const rowObj: any = {};
+        headers.forEach((header: string, index: number) => {
+          rowObj[header] = row[index] || null;
+        });
+        return rowObj;
+      });
+    }
+
+    return [];
+  } catch (error) {
+    // If preview extraction fails, return empty array
+    return [];
+  }
+}
 
 export async function exportSqlQuery(
   params: SqlExportParams,
@@ -98,9 +171,14 @@ export async function exportSqlQuery(
       } else if (format === 'xlsx') {
         responseData = await response.arrayBuffer();
         fileSize = responseData.byteLength;
-        // For XLSX, we can't easily count rows from ArrayBuffer
-        rowCount = undefined;
-        logDebug(`XLSX export file size: ${fileSize} bytes`);
+
+        // Analyze XLSX content to get accurate row count and data validation
+        const xlsxAnalysis = analyzeXlsxContent(responseData);
+        rowCount = xlsxAnalysis.rowCount;
+
+        logDebug(
+          `XLSX export - file size: ${fileSize} bytes, rows: ${rowCount}, has data: ${xlsxAnalysis.hasData}`
+        );
       }
     } catch (parseError) {
       logError(`Failed to parse ${format} response: ${parseError}`, parseError);
@@ -108,11 +186,8 @@ export async function exportSqlQuery(
     }
 
     // Validate that we have data before proceeding with file operations
-    // For XLSX, check file size; for others, check row count
-    const hasData =
-      format === 'xlsx'
-        ? fileSize > 100
-        : rowCount !== null && rowCount !== undefined && rowCount > 0;
+    // For all formats including XLSX, check row count
+    const hasData = rowCount !== null && rowCount !== undefined && rowCount > 0;
     if (!hasData) {
       logWarn(`Query returned no data for export`, { requestId });
       return {
@@ -208,6 +283,9 @@ export async function exportSqlQuery(
       };
     }
 
+    // Extract preview data (first 5 rows) for the response
+    const previewData = extractPreviewData(responseData, format);
+
     // Successful export - return standardized JSON response
     const successResponse: any = {
       success: true,
@@ -219,6 +297,11 @@ export async function exportSqlQuery(
       row_count: rowCount,
       database_id: databaseId,
       file_size_bytes: fileSize,
+      preview_data: previewData,
+      preview_note:
+        previewData.length > 0
+          ? `First ${previewData.length} rows shown (${rowCount} total rows exported)`
+          : 'No preview data available',
     };
 
     return {

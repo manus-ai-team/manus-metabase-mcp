@@ -15,6 +15,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as XLSX from 'xlsx';
 
 // Mock fs and path modules
 vi.mock('fs');
@@ -24,6 +25,33 @@ vi.mock('os');
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
+
+// Helper function to create a valid XLSX ArrayBuffer with test data
+function createMockXlsxWithData(): ArrayBuffer {
+  const testData = [
+    ['Name', 'Age', 'City'],
+    ['John Doe', 30, 'New York'],
+    ['Jane Smith', 25, 'London'],
+    ['Bob Johnson', 35, 'Paris'],
+  ];
+  
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(testData);
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+  
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  
+  // Ensure we return a proper ArrayBuffer
+  if (buffer instanceof ArrayBuffer) {
+    return buffer;
+  } else if (buffer instanceof Uint8Array) {
+    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  } else {
+    // If buffer is a regular array, convert to ArrayBuffer
+    const uint8Array = new Uint8Array(buffer);
+    return uint8Array.buffer;
+  }
+}
 
 describe('handleExport (export command)', () => {
   beforeEach(() => {
@@ -261,8 +289,8 @@ describe('handleExport (export command)', () => {
       });
       const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
 
-      // Mock successful fetch response with ArrayBuffer
-      const mockArrayBuffer = new ArrayBuffer(1024);
+      // Mock successful fetch response with ArrayBuffer containing actual data
+      const mockArrayBuffer = createMockXlsxWithData();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         arrayBuffer: () => Promise.resolve(mockArrayBuffer),
@@ -282,7 +310,15 @@ describe('handleExport (export command)', () => {
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData.success).toBe(true);
       expect(responseData.format).toBe('xlsx');
-      expect(responseData.file_size_bytes).toBe(1024);
+      expect(responseData.row_count).toBe(3); // 3 data rows in mock
+      expect(responseData.file_size_bytes).toBeGreaterThan(1000); // XLSX files are typically larger
+      expect(responseData.preview_data).toHaveLength(3); // Should have preview of all 3 rows
+      expect(responseData.preview_data[0]).toEqual({
+        'Name': 'John Doe',
+        'Age': 30,
+        'City': 'New York'
+      });
+      expect(responseData.preview_note).toContain('First 3 rows shown (3 total rows exported)');
     });
 
     it('should handle empty query results', async () => {

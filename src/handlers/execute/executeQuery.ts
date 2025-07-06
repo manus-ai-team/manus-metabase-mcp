@@ -88,9 +88,6 @@ export async function executeSqlQuery(
       rows: response?.data?.rows || [],
       cols: response?.data?.cols || [],
       row_count: rowCount,
-      native_form: {
-        query: response?.data?.native_form?.query || limitedQuery,
-      },
     };
 
     return {
@@ -100,7 +97,7 @@ export async function executeSqlQuery(
           text: JSON.stringify(
             {
               success: true,
-              query: query,
+              query: limitedQuery, // Use the actual executed query
               database_id: databaseId,
               row_count: rowCount,
               applied_limit: finalLimit,
