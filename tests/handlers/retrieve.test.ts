@@ -151,11 +151,60 @@ describe('handleRetrieve', () => {
       const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
 
       const request = createMockRequest('retrieve', { model: 'card', ids: [1] });
-      const result = await handleRetrieve(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError);
+      
+      // When all requests fail, it should now throw an error instead of returning partial success
+      await expect(
+        handleRetrieve(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow();
 
       expect(mockApiClient.getCard).toHaveBeenCalledWith(1);
+    });
+
+    it('should handle partial failures (some succeed, some fail)', async () => {
+      const sampleCard = { id: 1, name: 'Test Card' };
+      const apiError = new Error('API Error');
+      
+      // First call succeeds, second fails
+      mockApiClient.getCard
+        .mockResolvedValueOnce(createCachedResponse(sampleCard))
+        .mockRejectedValueOnce(apiError);
+        
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const request = createMockRequest('retrieve', { model: 'card', ids: [1, 2] });
+      const result = await handleRetrieve(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError);
+
+      expect(mockApiClient.getCard).toHaveBeenCalledTimes(2);
+      expect(result.content[0].text).toContain('successful_retrievals');
       expect(result.content[0].text).toContain('failed_retrievals');
-      expect(result.content[0].text).toContain('API Error');
+      expect(result.content[0].text).toContain('1/2 cards successfully');
+    });
+  });
+
+  describe('Database retrieval', () => {
+    it('should handle database not found error correctly', async () => {
+      // Mock a 404 error with enhanced error details for non-existent database
+      const mockError = {
+        details: {
+          category: 'resource_not_found',
+          httpStatus: 404,
+          retryable: false
+        },
+        message: 'database not found: 999'
+      };
+      Object.setPrototypeOf(mockError, McpError.prototype);
+      
+      mockApiClient.getDatabase.mockRejectedValue(mockError);
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const request = createMockRequest('retrieve', { model: 'database', ids: [999] });
+      
+      // Should throw a proper resource not found error, not a database connection error
+      await expect(
+        handleRetrieve(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow('database not found');
+
+      expect(mockApiClient.getDatabase).toHaveBeenCalledWith(999);
     });
   });
 

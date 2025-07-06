@@ -3,6 +3,11 @@ import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient, CachedResponse } from '../../api.js';
 import { ErrorCode, McpError } from '../../types/core.js';
 import {
+  ResourceNotFoundErrorFactory,
+  AuthorizationErrorFactory,
+  ValidationErrorFactory,
+} from '../../utils/errorFactory.js';
+import {
   handleApiError,
   saveRawStructure,
   validatePositiveInteger,
@@ -32,17 +37,19 @@ export async function handleRetrieve(
   // Validate required parameters
   if (!model) {
     logWarn('Missing model parameter in retrieve request', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'Model parameter is required. Must be one of: card, dashboard, table, database, collection, field'
+    throw ValidationErrorFactory.invalidParameter(
+      'model',
+      model,
+      'Must be one of: card, dashboard, table, database, collection, field'
     );
   }
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     logWarn('Missing or invalid ids parameter in retrieve request', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'IDs parameter is required and must be a non-empty array of numbers'
+    throw ValidationErrorFactory.invalidParameter(
+      'ids',
+      ids,
+      'Must be a non-empty array of numbers'
     );
   }
 
@@ -51,9 +58,10 @@ export async function handleRetrieve(
     logWarn(`Too many IDs requested: ${ids.length}. Maximum allowed: ${MAX_IDS_PER_REQUEST}`, {
       requestId,
     });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      `Too many IDs requested. Maximum allowed: ${MAX_IDS_PER_REQUEST} per request. For larger datasets, please make multiple requests.`
+    throw ValidationErrorFactory.invalidParameter(
+      'ids',
+      `${ids.length} items`,
+      `Maximum allowed: ${MAX_IDS_PER_REQUEST} per request. For larger datasets, please make multiple requests.`
     );
   }
 
@@ -81,7 +89,13 @@ export async function handleRetrieve(
   try {
     const startTime = Date.now();
     const results: any[] = [];
-    const errors: Array<{ id: number; error: string }> = [];
+    const errors: Array<{
+      id: number;
+      error: string;
+      category?: string;
+      retryable?: boolean;
+      httpStatus?: number;
+    }> = [];
     let apiHits = 0;
     let cacheHits = 0;
 
@@ -182,6 +196,19 @@ export async function handleRetrieve(
       } catch (error: any) {
         const errorMessage = error?.message || error?.data?.message || 'Unknown error';
         logWarn(`Failed to retrieve ${validatedModel} ${id}: ${errorMessage}`, { requestId });
+
+        // Check if this is an enhanced error with specific categories
+        if (error instanceof McpError) {
+          return {
+            success: false,
+            id,
+            error: errorMessage,
+            category: error.details.category,
+            retryable: error.details.retryable,
+            httpStatus: error.details.httpStatus,
+          };
+        }
+
         return { success: false, id, error: errorMessage };
       }
     };
@@ -203,11 +230,25 @@ export async function handleRetrieve(
 
       batchResults.forEach(result => {
         if (result.status === 'fulfilled') {
-          const { success, id, result: itemResult, error } = result.value;
+          const {
+            success,
+            id,
+            result: itemResult,
+            error,
+            category,
+            retryable,
+            httpStatus,
+          } = result.value;
           if (success) {
             results.push(itemResult);
           } else {
-            errors.push({ id, error });
+            errors.push({
+              id,
+              error,
+              category: category || 'unknown',
+              retryable: retryable !== undefined ? retryable : true,
+              httpStatus,
+            });
           }
         } else {
           // This shouldn't happen with our current implementation, but handle it gracefully
@@ -236,6 +277,42 @@ export async function handleRetrieve(
       numericIds.length > 1
         ? Math.round(((estimatedSequentialTime - totalTime) / estimatedSequentialTime) * 100)
         : 0;
+
+    // Handle scenarios where all or most requests failed
+    if (successCount === 0 && errorCount > 0) {
+      // All requests failed - analyze the error types to provide appropriate guidance
+      const notFoundErrors = errors.filter(e => e.category === 'resource_not_found');
+      const authErrors = errors.filter(e => e.category === 'authorization');
+      const otherErrors = errors.filter(
+        e => e.category !== 'resource_not_found' && e.category !== 'authorization'
+      );
+
+      if (notFoundErrors.length === errorCount) {
+        // All errors were "not found" - this is likely a bad request
+        const idsText =
+          numericIds.length === 1 ? `ID ${numericIds[0]}` : `IDs ${numericIds.join(', ')}`;
+        throw ResourceNotFoundErrorFactory.resource(validatedModel, idsText);
+      } else if (authErrors.length === errorCount) {
+        // All errors were authorization - permission issue
+        throw AuthorizationErrorFactory.insufficientPermissions(validatedModel, 'retrieve');
+      } else if (otherErrors.length > 0) {
+        // Mixed errors or other issues - throw the first other error as it's likely more specific
+        const firstOtherError = otherErrors[0] || errors[0];
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to retrieve ${validatedModel}(s): ${firstOtherError.error}`
+        );
+      }
+    }
+
+    // If only some requests failed but most succeeded, continue with partial success response
+    // But if failure rate is high (>50%), log a warning
+    if (errorCount > 0 && errorCount / numericIds.length > 0.5) {
+      logWarn(
+        `High failure rate in retrieve operation: ${errorCount}/${numericIds.length} ${validatedModel}(s) failed`,
+        { requestId, errors: errors.map(e => ({ id: e.id, error: e.error, category: e.category })) }
+      );
+    }
 
     // Create response object
     const response: any = {

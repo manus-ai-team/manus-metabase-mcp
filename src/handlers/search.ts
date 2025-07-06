@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../api.js';
 import { ErrorCode, McpError } from '../types/core.js';
+import { ValidationErrorFactory } from '../utils/errorFactory.js';
 import { handleApiError, validatePositiveInteger, validateEnumValue } from '../utils/index.js';
 
 export async function handleSearch(
@@ -48,8 +49,9 @@ export async function handleSearch(
   // Updated validation: allow searching without query/id if database_id is provided
   if (!searchQuery && (!ids || ids.length === 0) && !databaseId) {
     logWarn('Missing query, ids, or database_id parameter in search request', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
+    throw ValidationErrorFactory.invalidParameter(
+      'query_or_ids_or_database_id',
+      'none provided',
       'Either search query, ids parameter, or database_id is required'
     );
   }
@@ -57,8 +59,9 @@ export async function handleSearch(
   // Validate that only one search method is used
   if (searchQuery && ids && ids.length > 0) {
     logWarn('Cannot use both query and ids parameters simultaneously', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
+    throw ValidationErrorFactory.invalidParameter(
+      'query_and_ids',
+      'both provided',
       'Cannot use both query and ids parameters - use either search query OR ids, not both'
     );
   }

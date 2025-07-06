@@ -612,7 +612,42 @@ export class MetabaseServer {
       } catch (error) {
         // If it's already an McpError, re-throw it to be handled by the MCP framework
         if (error instanceof McpError) {
-          throw error;
+          // For enhanced errors, return structured guidance in the response
+          // Use the error message directly without duplication
+          const errorText = [`Error: ${error.message}`];
+
+          // Add guidance if different from the main message
+          if (error.details.agentGuidance && error.details.agentGuidance !== error.message) {
+            errorText.push(`\n\nGuidance: ${error.details.agentGuidance}`);
+          }
+
+          errorText.push(`\n\nRecovery Action: ${error.details.recoveryAction}`);
+          errorText.push(`\n\nRetryable: ${error.details.retryable}`);
+
+          // Add retry timing if available
+          if (error.details.retryAfterMs) {
+            errorText.push(`\n\nRetry After: ${error.details.retryAfterMs}ms`);
+          }
+
+          const errorResponse = {
+            content: [
+              {
+                type: 'text',
+                text: errorText.join(''),
+              },
+            ],
+            isError: true,
+          };
+
+          // Add troubleshooting steps if available
+          if (error.details.troubleshootingSteps && error.details.troubleshootingSteps.length > 0) {
+            errorResponse.content.push({
+              type: 'text',
+              text: `\nTroubleshooting Steps:\n${error.details.troubleshootingSteps.map((step, index) => `${index + 1}. ${step}`).join('\n')}`,
+            });
+          }
+
+          return errorResponse;
         }
 
         // Handle other errors with generic fallback

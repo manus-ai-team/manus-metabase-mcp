@@ -1,5 +1,6 @@
 import { config, AuthMethod } from './config.js';
 import { ErrorCode, McpError } from './types/core.js';
+import { NetworkErrorFactory, createErrorFromHttpResponse } from './utils/errorFactory.js';
 
 // Logger level enum
 enum LogLevel {
@@ -54,6 +55,36 @@ export class MetabaseApiClient {
     } else {
       this.logInfo('Using Session Token authentication method');
     }
+  }
+
+  /**
+   * Extract resource type and ID from API path for better error context
+   */
+  private extractResourceFromPath(path: string): {
+    resourceType?: string;
+    resourceId?: string | number;
+  } {
+    // Handle common API patterns
+    const patterns = [
+      { regex: /\/api\/(card)\/(\d+)/, type: 'card' },
+      { regex: /\/api\/(dashboard)\/(\d+)/, type: 'dashboard' },
+      { regex: /\/api\/(database)\/(\d+)/, type: 'database' },
+      { regex: /\/api\/(table)\/(\d+)/, type: 'table' },
+      { regex: /\/api\/(collection)\/(\d+)/, type: 'collection' },
+      { regex: /\/api\/(field)\/(\d+)/, type: 'field' },
+    ];
+
+    for (const pattern of patterns) {
+      const match = path.match(pattern.regex);
+      if (match) {
+        return {
+          resourceType: pattern.type,
+          resourceId: parseInt(match[2], 10),
+        };
+      }
+    }
+
+    return { resourceType: undefined, resourceId: undefined };
   }
 
   // Enhanced logging utilities
@@ -147,25 +178,51 @@ export class MetabaseApiClient {
         const errorMessage = `API request failed with status ${response.status}: ${response.statusText}`;
         this.logWarn(errorMessage, errorData);
 
-        throw {
-          status: response.status,
-          message: response.statusText,
-          data: errorData,
-        };
+        // Use enhanced error factory for HTTP errors with resource context
+        const { resourceType, resourceId } = this.extractResourceFromPath(path);
+        throw createErrorFromHttpResponse(
+          response.status,
+          errorData,
+          `API request to ${path}`,
+          resourceType,
+          resourceId
+        );
       }
 
       this.logDebug(`Received successful response from ${path}`);
       return response.json() as Promise<T>;
     } catch (error) {
       clearTimeout(timeoutId);
+
+      // Handle timeout errors specifically
       if (error instanceof Error && error.name === 'AbortError') {
         this.logError(`Request to ${path} timed out after ${this.REQUEST_TIMEOUT_MS}ms`, error);
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Request timed out after ${this.REQUEST_TIMEOUT_MS / 1000} seconds`
-        );
+        throw NetworkErrorFactory.timeout(`API request to ${path}`, this.REQUEST_TIMEOUT_MS);
       }
-      throw error;
+
+      // Handle network connection errors
+      if (
+        error instanceof Error &&
+        (error.message.includes('fetch') ||
+          error.message.includes('network') ||
+          error.message.includes('ENOTFOUND') ||
+          error.message.includes('ECONNREFUSED'))
+      ) {
+        this.logError(`Network error for request to ${path}`, error);
+        throw NetworkErrorFactory.connectionError(this.baseUrl);
+      }
+
+      // If it's already an enhanced McpError, re-throw it
+      if (error instanceof McpError) {
+        throw error;
+      }
+
+      // For other errors, wrap in generic network error
+      this.logError(`Unexpected error for request to ${path}`, error);
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Unexpected error during API request: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 

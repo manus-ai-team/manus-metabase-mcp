@@ -3,6 +3,7 @@
  */
 
 import { ErrorCode, McpError } from '../types/core.js';
+import { createErrorFromHttpResponse } from './errorFactory.js';
 
 /**
  * Error handling context for different operations
@@ -33,7 +34,7 @@ export function handleApiError(
   let statusCode = 'unknown';
 
   if (error?.response) {
-    // HTTP error response
+    // HTTP error response - use the enhanced error factory
     statusCode = error.response.status?.toString() || 'unknown';
     const responseData = error.response.data || error.response;
 
@@ -45,6 +46,23 @@ export function handleApiError(
       errorDetails = responseData.error;
     } else {
       errorDetails = JSON.stringify(responseData);
+    }
+
+    // Use the enhanced error factory for HTTP responses
+    try {
+      const httpStatus = parseInt(statusCode, 10);
+      if (!isNaN(httpStatus)) {
+        return createErrorFromHttpResponse(
+          httpStatus,
+          responseData,
+          context.operation,
+          context.resourceType,
+          context.resourceId
+        );
+      }
+    } catch (factoryError) {
+      // Fall back to generic error handling if factory fails
+      logError('Error factory failed, using generic error handling', factoryError);
     }
 
     errorMessage = `Metabase API error (${statusCode})`;
@@ -70,10 +88,7 @@ export function handleApiError(
     error
   );
 
-  return new McpError(
-    ErrorCode.InternalError,
-    `${errorMessage}${errorDetails ? ` Details: ${errorDetails}` : ''}`
-  );
+  return new McpError(ErrorCode.InternalError, errorMessage);
 }
 
 /**
@@ -105,7 +120,7 @@ function getStatusCodeMessage(statusCode: string, context: ErrorContext): string
       if (resourceType) {
         return `${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} not found. Check that the ${resourceType} exists.`;
       }
-      return `Resource not found. Check your parameters and ensure the resource exists.`;
+      return `Metabase item not found. Check your parameters and ensure the item exists.`;
 
     case '413':
       return `Request payload too large. Try reducing the result set size or use query filters.`;
@@ -150,7 +165,12 @@ function getGenericErrorMessage(errorMessage: string, context: ErrorContext): st
     return `Access denied. Check your permissions for this operation.`;
   }
 
-  if (errorMessage.includes('database') || errorMessage.includes('Database')) {
+  if (
+    errorMessage.toLowerCase().includes('database connection') ||
+    errorMessage.toLowerCase().includes('database timeout') ||
+    errorMessage.toLowerCase().includes('connection refused') ||
+    errorMessage.toLowerCase().includes('connection failed')
+  ) {
     return `Database connection error. Ensure the database is accessible and your credentials are correct.`;
   }
 
