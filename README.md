@@ -16,9 +16,18 @@ This TypeScript-based MCP server provides seamless integration with the Metabase
 ### Installation Options
 
 #### Option 1: Desktop Extension (Recommended for Claude Desktop Users)
-1. Download the latest `metabase-mcp.dxt` file from [Releases](https://github.com/jerichosequitin/metabase-mcp/releases)
+
+Choose the appropriate DXT package for your authentication method:
+
+**API Key Authentication (Recommended):**
+1. Download `metabase-mcp-api-key.dxt` from [Releases](https://github.com/jerichosequitin/metabase-mcp/releases)
 2. Open the `.dxt` file with Claude Desktop to install
-3. Configure your Metabase credentials in Claude Desktop's extension settings
+3. Configure your Metabase URL and API key in Claude Desktop's extension settings
+
+**Session Authentication (Email/Password):**
+1. Download `metabase-mcp-session.dxt` from [Releases](https://github.com/jerichosequitin/metabase-mcp/releases)
+2. Open the `.dxt` file with Claude Desktop to install
+3. Configure your Metabase URL, email, and password in Claude Desktop's extension settings
 
 #### Option 2: Manual Installation
 Follow the standard MCP server installation process detailed in the Configuration section below.
@@ -114,12 +123,18 @@ The Metabase MCP Server is now available as a Desktop Extension (DXT) for Claude
 
 ### DXT Installation
 
-1. **Download**: Get the latest `metabase-mcp.dxt` file from [GitHub Releases](https://github.com/jerichosequitin/metabase-mcp/releases)
+Due to current limitations in the DXT file format specification, we provide separate DXT packages for different authentication methods:
+
+1. **Download** the appropriate DXT file from [GitHub Releases](https://github.com/jerichosequitin/metabase-mcp/releases):
+   - `metabase-mcp-api-key.dxt` - For API key authentication (recommended)
+   - `metabase-mcp-session.dxt` - For email/password authentication
 2. **Install**: Open the `.dxt` file with Claude Desktop - it will automatically show an installation dialog
 3. **Configure**: Set up your Metabase credentials in Claude Desktop's extension settings:
    - **Metabase URL** (required): Your Metabase instance URL
-   - **API Key** (recommended) or **Email/Password** for authentication
+   - Authentication credentials based on your chosen DXT package
    - **Optional**: Log level, cache TTL, and request timeout settings
+
+> **Note**: The separate DXT packages are required due to current limitations in the DXT v0.1 specification regarding optional environment variables. Both packages provide identical functionality with different authentication methods.
 
 ### Benefits of DXT Installation
 
