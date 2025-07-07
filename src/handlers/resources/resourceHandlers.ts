@@ -3,6 +3,14 @@ import { ErrorCode, McpError } from '../../types/core.js';
 import { MetabaseApiClient } from '../../api.js';
 import { getQueryTemplate } from './templates.js';
 import {
+  optimizeDashboardResource,
+  optimizeCardResource,
+  optimizeDatabaseResource,
+  optimizeTableResource,
+  optimizeMetricResource,
+  OptimizationLevel,
+} from './optimizers.js';
+import {
   ListResourcesRequest,
   ReadResourceRequest,
   ListResourceTemplatesRequest,
@@ -190,11 +198,14 @@ async function handleDashboardResource(
     `Successfully retrieved dashboard: ${response.data.name || dashboardId} (source: ${response.source})`
   );
 
+  // Optimize the dashboard response to reduce token usage
+  const optimizedDashboard = optimizeDashboardResource(response.data, OptimizationLevel.STANDARD);
+
   const contents: ResourceContent[] = [
     {
       uri,
       mimeType: 'application/json',
-      text: JSON.stringify(response.data, null, 2),
+      text: JSON.stringify(optimizedDashboard, null, 2),
     },
   ];
 
@@ -219,11 +230,14 @@ async function handleCardResource(
     `Successfully retrieved card: ${response.data.name || cardId} (source: ${response.source})`
   );
 
+  // Optimize the card response to reduce token usage
+  const optimizedCard = optimizeCardResource(response.data, OptimizationLevel.STANDARD);
+
   const contents: ResourceContent[] = [
     {
       uri,
       mimeType: 'application/json',
-      text: JSON.stringify(response.data, null, 2),
+      text: JSON.stringify(optimizedCard, null, 2),
     },
   ];
 
@@ -248,11 +262,14 @@ async function handleDatabaseResource(
     `Successfully retrieved database: ${response.data.name || databaseId} (source: ${response.source})`
   );
 
+  // Optimize the database response to reduce token usage
+  const optimizedDatabase = optimizeDatabaseResource(response.data, OptimizationLevel.STANDARD);
+
   const contents: ResourceContent[] = [
     {
       uri,
       mimeType: 'application/json',
-      text: JSON.stringify(response.data, null, 2),
+      text: JSON.stringify(optimizedDatabase, null, 2),
     },
   ];
 
@@ -289,11 +306,14 @@ async function handleSchemaResource(
     `Successfully retrieved schema for table: ${tableName} (source: ${tableResponse.source})`
   );
 
+  // Optimize the table response to reduce token usage significantly
+  const optimizedTable = optimizeTableResource(tableResponse.data, OptimizationLevel.STANDARD);
+
   const contents: ResourceContent[] = [
     {
       uri,
       mimeType: 'application/json',
-      text: JSON.stringify(tableResponse.data, null, 2),
+      text: JSON.stringify(optimizedTable, null, 2),
     },
   ];
 
@@ -346,11 +366,14 @@ async function handleMetricResource(
 
   logInfo(`Successfully retrieved metric: ${metric.name}`);
 
+  // Optimize the metric response to reduce token usage
+  const optimizedMetric = optimizeMetricResource(metric, OptimizationLevel.STANDARD);
+
   const contents: ResourceContent[] = [
     {
       uri,
       mimeType: 'application/json',
-      text: JSON.stringify(metric, null, 2),
+      text: JSON.stringify(optimizedMetric, null, 2),
     },
   ];
 
