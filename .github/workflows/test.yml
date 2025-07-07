@@ -165,32 +165,30 @@ jobs:
     - name: Install DXT CLI
       run: npm install -g @anthropic-ai/dxt
       
-    - name: Build project
-      run: npm run build
-      
-    - name: Validate DXT manifest
-      run: npm run dxt:test
-      
-    - name: Build DXT package
+    - name: Build DXT packages
       if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
       run: |
-        dxt pack .
-        echo "✅ DXT package built successfully"
+        npm run dxt:build
+        echo "✅ DXT packages built successfully"
         ls -la *.dxt
         
-    - name: Upload DXT artifact
+    - name: Upload DXT artifacts
       if: github.ref == 'refs/heads/main'
       uses: actions/upload-artifact@v4
       with:
-        name: metabase-mcp-dxt
-        path: metabase-mcp.dxt
+        name: metabase-mcp-dxt-packages
+        path: |
+          metabase-mcp-api-key.dxt
+          metabase-mcp-session.dxt
         retention-days: 7
         
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v2
       with:
-        files: metabase-mcp.dxt
+        files: |
+          metabase-mcp-api-key.dxt
+          metabase-mcp-session.dxt
         generate_release_notes: true
         name: Release ${{ github.ref_name }}
         body: |
@@ -198,9 +196,17 @@ jobs:
           
           ### Desktop Extension (DXT) Installation
           
-          1. Download the `metabase-mcp.dxt` file from the assets below
+          Choose the appropriate DXT package for your authentication method:
+          
+          **API Key Authentication (Recommended):**
+          1. Download `metabase-mcp-api-key.dxt` from the assets below
           2. Open the file with Claude Desktop to install
-          3. Configure your Metabase credentials in Claude Desktop's extension settings
+          3. Configure your Metabase URL and API key in Claude Desktop's extension settings
+          
+          **Session Authentication (Email/Password):**
+          1. Download `metabase-mcp-session.dxt` from the assets below
+          2. Open the file with Claude Desktop to install  
+          3. Configure your Metabase URL, email, and password in Claude Desktop's extension settings
           
           ### Manual Installation
           
@@ -220,13 +226,17 @@ jobs:
         echo "|--------|---------|" >> $GITHUB_STEP_SUMMARY
         echo "| Manifest | ✅ Valid |" >> $GITHUB_STEP_SUMMARY
         echo "| Build | ✅ Successful |" >> $GITHUB_STEP_SUMMARY
-        if [ -f metabase-mcp.dxt ]; then
-          SIZE=$(ls -lh metabase-mcp.dxt | awk '{print $5}')
-          echo "| Package Size | $SIZE |" >> $GITHUB_STEP_SUMMARY
+        if [ -f metabase-mcp-api-key.dxt ]; then
+          API_SIZE=$(ls -lh metabase-mcp-api-key.dxt | awk '{print $5}')
+          echo "| API Key Package | $API_SIZE |" >> $GITHUB_STEP_SUMMARY
         fi
-        echo "| Artifact | ✅ Uploaded |" >> $GITHUB_STEP_SUMMARY
+        if [ -f metabase-mcp-session.dxt ]; then
+          SESSION_SIZE=$(ls -lh metabase-mcp-session.dxt | awk '{print $5}')
+          echo "| Session Package | $SESSION_SIZE |" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "| Artifacts | ✅ Uploaded |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Note:** DXT packages are available as build artifacts for 7 days." >> $GITHUB_STEP_SUMMARY
+        echo "**Note:** Both DXT packages (API key and session auth) are available as build artifacts for 7 days." >> $GITHUB_STEP_SUMMARY
 
   test-summary:
     name: Test Summary

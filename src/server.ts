@@ -5,7 +5,7 @@ import {
   ReadResourceRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { LogLevel } from './config.js';
+import { LogLevel, authMethod, AuthMethod } from './config.js';
 import { generateRequestId } from './utils/index.js';
 import {
   ErrorCode,
@@ -29,9 +29,13 @@ export class MetabaseServer {
   private apiClient: MetabaseApiClient;
 
   constructor() {
+    // Generate server name based on authentication method for proper DXT handling
+    const serverName =
+      authMethod === AuthMethod.API_KEY ? 'metabase-mcp-api-key' : 'metabase-mcp-session';
+
     this.server = new Server(
       {
-        name: 'metabase-mcp',
+        name: serverName,
         version: '1.0.0',
       },
       {
