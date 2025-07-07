@@ -5,13 +5,13 @@
 **Version**: 1.0.0
 **Author**: Jericho Sequitin (@jerichosequitin)
 
-A lightweight, enterprise-grade Model Context Protocol server designed for high-performance integration between AI assistants and Metabase analytics platforms. Built with intelligent caching, response optimization, and unified command architecture for production environments.
+A lightweight, enterprise-grade Model Context Protocol server designed for high-performance integration between AI assistants and Metabase analytics platforms. Built with intelligent caching, response optimization, and unified command architecture.
 
 **Available as a Desktop Extension (DXT) for Claude Desktop.**
 
 ## Overview
 
-This TypeScript-based MCP server provides seamless integration with the Metabase API, enabling AI assistants to directly interact with your analytics data with enterprise-level performance and reliability. Designed for Claude and other MCP-compatible AI assistants, this server acts as an optimized bridge between your analytics platform and conversational AI.
+This TypeScript-based MCP server provides seamless integration with the Metabase API, enabling AI assistants to directly interact with your analytics data with enterprise-level performance and reliability. Designed for Claude and other MCP-compatible AI assistants, this server acts as an optimized bridge between your analytics platform and conversational AI. The server communicates via STDIO and is automatically managed by host applications.
 
 ### Installation Options
 
@@ -177,7 +177,7 @@ npm install
 # Build the project
 npm run build
 
-# Start the server
+# Test the server build
 npm start
 
 # For development with auto-rebuild and concurrent watching
@@ -195,7 +195,7 @@ npm run dev            # Build and run once
 # Production
 npm run build          # Build TypeScript to JavaScript
 npm run build:clean    # Clean build and rebuild
-npm start             # Start the built server
+npm start             # Test the built server (for development/debugging only)
 
 # Quality Assurance
 npm run lint          # Run ESLint
@@ -206,7 +206,7 @@ npm run type-check    # TypeScript type checking
 npm run validate      # Run all QA checks
 
 # Debugging
-npm run inspector     # Start with MCP Inspector
+npm run inspector     # Test with MCP Inspector (for development/debugging)
 npm run clean         # Clean build artifacts
 ```
 
@@ -247,7 +247,7 @@ For local development and testing, follow these steps:
    # Verify the build was successful
    ls -la build/src/index.js
 
-   # Optional: Test the server manually (for development/debugging only)
+   # Optional: Test the server build (for development/debugging only)
    # npm start
    ```
 
@@ -297,7 +297,7 @@ To integrate with Claude Desktop, you'll need to configure the MCP server in Cla
 - **Use absolute paths** for local development (e.g., `/Users/username/Documents/metabase-mcp/build/src/index.js`)
 - **Replace `your-username`** with your actual username
 - **Replace `path/to/metabase-mcp`** with the actual path to your cloned repository
-- **No need to run the server manually** - Claude Desktop will automatically start and manage the MCP server process
+- **No need to run the server manually** - Claude Desktop will automatically invoke and manage the MCP server via STDIO
 - **Never commit real credentials** to version control
 - **Restart Claude Desktop** after making configuration changes
 
@@ -546,13 +546,13 @@ The server provides detailed performance metrics for all operations:
 
 ## Debugging
 
-Since MCP servers communicate over stdio, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) for debugging:
+MCP servers communicate via STDIO (not HTTP) and are managed by host applications like Claude Desktop. For debugging and development testing, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
 npm run inspector
 ```
 
-The Inspector provides a browser-based interface for monitoring requests, responses, and performance metrics.
+The Inspector provides a browser-based interface for monitoring MCP protocol requests, responses, and performance metrics during development.
 
 ## Docker Support
 
@@ -562,18 +562,21 @@ The Inspector provides a browser-based interface for monitoring requests, respon
 # Build the Docker image
 docker build -t metabase-mcp .
 
-# Run with API key authentication
+# Test with API key authentication
 docker run -e METABASE_URL=https://metabase.example.com \
            -e METABASE_API_KEY=your_api_key \
            -e LOG_LEVEL=info \
            metabase-mcp
 
-# Run with username/password authentication
+# Test with username/password authentication
 docker run -e METABASE_URL=https://metabase.example.com \
            -e METABASE_USER_EMAIL=user@example.com \
            -e METABASE_PASSWORD=password \
            -e LOG_LEVEL=info \
            metabase-mcp
+
+# Note: Docker is primarily for development/testing. In production,
+# host applications like Claude Desktop manage the MCP server lifecycle via STDIO.
 ```
 
 ## Testing
@@ -584,8 +587,8 @@ The project includes a robust testing framework with comprehensive unit tests co
 
 #### Test Coverage by Handler
 - **clearCache**: Parameter validation, cache operations, response formatting
-- **executeQuery**: SQL execution, parameter handling, row limits, query processing
-- **exportQuery**: Format support (CSV/JSON/XLSX), file operations, validation
+- **execute**: SQL execution, parameter handling, row limits, query processing
+- **export**: Format support (CSV/JSON/XLSX), file operations, validation
 - **list**: All model types, caching, error handling, empty results
 - **retrieve**: Multi-entity support, batch operations, cache behavior
 - **search**: Advanced search parameters, model restrictions, query combinations
