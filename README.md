@@ -2,13 +2,26 @@
 
 [![smithery badge](https://smithery.ai/badge/@jerichosequitin/metabase-mcp)](https://smithery.ai/server/@jerichosequitin/metabase-mcp)
 
+**Version**: 1.0.0
 **Author**: Jericho Sequitin (@jerichosequitin)
 
 A lightweight, enterprise-grade Model Context Protocol server designed for high-performance integration between AI assistants and Metabase analytics platforms. Built with intelligent caching, response optimization, and unified command architecture for production environments.
 
+**Available as a Desktop Extension (DXT) for Claude Desktop.**
+
 ## Overview
 
 This TypeScript-based MCP server provides seamless integration with the Metabase API, enabling AI assistants to directly interact with your analytics data with enterprise-level performance and reliability. Designed for Claude and other MCP-compatible AI assistants, this server acts as an optimized bridge between your analytics platform and conversational AI.
+
+### Installation Options
+
+#### Option 1: Desktop Extension (Recommended for Claude Desktop Users)
+1. Download the latest `metabase-mcp.dxt` file from [Releases](https://github.com/jerichosequitin/metabase-mcp/releases)
+2. Open the `.dxt` file with Claude Desktop to install
+3. Configure your Metabase credentials in Claude Desktop's extension settings
+
+#### Option 2: Manual Installation
+Follow the standard MCP server installation process detailed in the Configuration section below.
 
 ### Key Features
 
@@ -95,9 +108,29 @@ The server exposes the following optimized tools for AI assistants:
 - **Rate Limiting**: Prevents API overload with intelligent batching
 - **Performance Metrics**: Real-time processing statistics and time savings
 
+## Desktop Extension (DXT) for Claude Desktop
+
+The Metabase MCP Server is now available as a Desktop Extension (DXT) for Claude Desktop users, providing single-click installation and automatic configuration.
+
+### DXT Installation
+
+1. **Download**: Get the latest `metabase-mcp.dxt` file from [GitHub Releases](https://github.com/jerichosequitin/metabase-mcp/releases)
+2. **Install**: Open the `.dxt` file with Claude Desktop - it will automatically show an installation dialog
+3. **Configure**: Set up your Metabase credentials in Claude Desktop's extension settings:
+   - **Metabase URL** (required): Your Metabase instance URL
+   - **API Key** (recommended) or **Email/Password** for authentication
+   - **Optional**: Log level, cache TTL, and request timeout settings
+
+### Benefits of DXT Installation
+
+- **Single-click installation**: No manual configuration files or command-line setup
+- **Automatic updates**: Claude Desktop manages extension updates
+- **User-friendly settings**: Configure through Claude Desktop's UI
+- **Seamless integration**: Tools automatically available in your conversations
+
 ## Configuration
 
-The server supports two authentication methods:
+The server supports two authentication methods for both DXT and manual installations:
 
 ### Option 1: Username and Password Authentication
 
@@ -284,13 +317,13 @@ list({ model: "cards" })
 // Get first 100 cards with pagination (for large datasets)
 list({ model: "cards", limit: 100 })
 
-// Get next page of cards  
+// Get next page of cards
 list({ model: "cards", offset: 100, limit: 100 })
 
 // Get overview of all dashboards
 list({ model: "dashboards" })
 
-// Get overview of all tables  
+// Get overview of all tables
 list({ model: "tables" })
 
 // Get overview of all databases
@@ -409,7 +442,7 @@ execute({
   card_parameters: [
     {
       "id": "1646c8b5-b9fb-32db-c198-7685b3f793d8",
-      "slug": "start_date", 
+      "slug": "start_date",
       "target": ["dimension", ["template-tag", "start_date"]],
       "type": "date/all-options",
       "value": "2024-01-01~2024-12-31"
@@ -422,7 +455,7 @@ execute({
       "value": "active"
     },
     {
-      "id": "b86c100e-87cb-09d6-7c33-e58cd2cdbcb2", 
+      "id": "b86c100e-87cb-09d6-7c33-e58cd2cdbcb2",
       "slug": "department_id",
       "target": ["dimension", ["template-tag", "department_id"]],
       "type": "id",
@@ -450,7 +483,7 @@ export({
     {
       "id": "f1e2d3c4-b5a6-9870-cdef-123456789abc",
       "slug": "year",
-      "target": ["dimension", ["template-tag", "year"]], 
+      "target": ["dimension", ["template-tag", "year"]],
       "type": "number",
       "value": "2024"
     },
@@ -458,7 +491,7 @@ export({
       "id": "a9b8c7d6-e5f4-3210-9876-fedcba987654",
       "slug": "region",
       "target": ["dimension", ["template-tag", "region"]],
-      "type": "text", 
+      "type": "text",
       "value": "North America"
     },
     {
@@ -614,6 +647,50 @@ Automated testing runs on:
 
 ### Code Quality
 - **Modular Architecture**: Organized handlers, types, and utilities
+
+## Building Desktop Extension (DXT)
+
+For developers who want to build and distribute the Desktop Extension:
+
+### Prerequisites
+- Node.js 18+ installed
+- DXT CLI tool: `npm install -g @anthropic-ai/dxt`
+
+### Building the DXT Package
+
+```bash
+# 1. Build the project
+npm run build
+
+# 2. Create the DXT package
+dxt pack .
+
+# This creates metabase-mcp.dxt ready for distribution
+```
+
+### DXT Development Scripts
+
+```bash
+# Run complete DXT build and validation
+npm run dxt:build
+
+# Validate DXT manifest structure
+npm run dxt:test
+```
+
+### Distribution
+
+1. The `.dxt` file should be distributed via GitHub Releases (not committed to the repository)
+2. Users download and open the file with Claude Desktop for automatic installation
+3. No specific storage location required - Claude Desktop handles the installation
+
+### DXT Package Contents
+
+- **manifest.json**: DXT configuration and metadata
+- **build/**: Compiled TypeScript server code
+- **node_modules/**: All required dependencies
+- **icon.png**: Metabase logo for the extension
+- **package.json**: NPM configuration
 - **Error Handling**: Comprehensive error handling with detailed logging
 - **Documentation**: Extensive inline documentation and type definitions
 - **Testing**: Automated CI testing across Node.js versions
