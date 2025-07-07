@@ -21,7 +21,7 @@ import {
 } from './types.js';
 
 /**
- * Handle listing all available resources
+ * Handle listing all available resources across multiple Metabase resource types
  */
 export async function handleListResources(
   _request: ListResourcesRequest,
@@ -29,29 +29,132 @@ export async function handleListResources(
   logInfo: LogFunction,
   logError: LogFunction
 ) {
-  logInfo('Processing request to list resources', { requestId: generateRequestId() });
+  const requestId = generateRequestId();
+  logInfo('Processing request to list comprehensive Metabase resources', { requestId });
   await apiClient.getSessionToken();
 
   try {
-    // Get dashboard list using caching method
-    const dashboardsResponse = await apiClient.getDashboardsList();
+    const resources: Resource[] = [];
+    let totalResourceCount = 0;
 
-    const resourceCount = dashboardsResponse.data.length;
+    // Fetch multiple resource types concurrently for better performance
+    const [cardsResponse, dashboardsResponse, databasesResponse, tablesResponse] =
+      await Promise.all([
+        apiClient.getCardsList().catch(error => {
+          logError('Failed to fetch cards', error);
+          return { data: [], source: 'error' };
+        }),
+        apiClient.getDashboardsList().catch(error => {
+          logError('Failed to fetch dashboards', error);
+          return { data: [], source: 'error' };
+        }),
+        apiClient.getDatabasesList().catch(error => {
+          logError('Failed to fetch databases', error);
+          return { data: [], source: 'error' };
+        }),
+        apiClient.getTablesList().catch(error => {
+          logError('Failed to fetch tables', error);
+          return { data: [], source: 'error' };
+        }),
+      ]);
+
+    // Add cards/questions as resources
+    if (cardsResponse.data.length > 0) {
+      const cardResources = cardsResponse.data
+        .filter((card: any) => !card.archived) // Only active cards
+        .map((card: any) => ({
+          uri: `metabase://card/${card.id}`,
+          mimeType: 'application/json',
+          name: `[Card] ${card.name}`,
+          description: `Card: ${card.name}${card.description ? ` - ${card.description}` : ''}`,
+        }));
+
+      resources.push(...cardResources);
+      totalResourceCount += cardsResponse.data.length;
+      logInfo(
+        `Added ${cardResources.length} cards (${cardsResponse.data.length} total, source: ${cardsResponse.source})`
+      );
+    }
+
+    // Add dashboards as resources
+    if (dashboardsResponse.data.length > 0) {
+      const dashboardResources = dashboardsResponse.data
+        .filter((dashboard: any) => !dashboard.archived) // Only active dashboards
+        .map((dashboard: any) => ({
+          uri: `metabase://dashboard/${dashboard.id}`,
+          mimeType: 'application/json',
+          name: `[Dashboard] ${dashboard.name}`,
+          description: `Dashboard: ${dashboard.name}${dashboard.description ? ` - ${dashboard.description}` : ''}`,
+        }));
+
+      resources.push(...dashboardResources);
+      totalResourceCount += dashboardsResponse.data.length;
+      logInfo(
+        `Added ${dashboardResources.length} dashboards (${dashboardsResponse.data.length} total, source: ${dashboardsResponse.source})`
+      );
+    }
+
+    // Add databases as resources
+    if (databasesResponse.data.length > 0) {
+      const databaseResources = databasesResponse.data
+        .filter((database: any) => !database.is_sample) // Exclude sample databases
+        .map((database: any) => ({
+          uri: `metabase://database/${database.id}`,
+          mimeType: 'application/json',
+          name: `[Database] ${database.name}`,
+          description: `Database: ${database.name} (${database.engine})${database.description ? ` - ${database.description}` : ''}`,
+        }));
+
+      resources.push(...databaseResources);
+      totalResourceCount += databasesResponse.data.length;
+      logInfo(
+        `Added ${databaseResources.length} databases (${databasesResponse.data.length} total, source: ${databasesResponse.source})`
+      );
+    }
+
+    // Add tables as resources
+    if (tablesResponse.data.length > 0) {
+      const tableResources = tablesResponse.data
+        .filter((table: any) => table.active && !table.visibility_type) // Only active, visible tables
+        .map((table: any) => ({
+          uri: `metabase://schema/${table.db_id}/${table.name}`,
+          mimeType: 'application/json',
+          name: `[Table] ${table.display_name || table.name}`,
+          description: `Table: ${table.display_name || table.name} in ${table.db?.name || 'database'}${table.description ? ` - ${table.description}` : ''}`,
+        }));
+
+      resources.push(...tableResources);
+      totalResourceCount += tablesResponse.data.length;
+      logInfo(
+        `Added ${tableResources.length} tables (${tablesResponse.data.length} total, source: ${tablesResponse.source})`
+      );
+    }
+
+    // Sort resources by type (Cards, Dashboards, Databases, Tables)
+    const sortedResources = resources.sort((a, b) => {
+      const typeOrder = { card: 0, dashboard: 1, database: 2, schema: 3 };
+      const aType = a.uri.includes('/schema/')
+        ? 'schema'
+        : (a.uri.split('/')[2] as keyof typeof typeOrder);
+      const bType = b.uri.includes('/schema/')
+        ? 'schema'
+        : (b.uri.split('/')[2] as keyof typeof typeOrder);
+
+      if (typeOrder[aType] !== typeOrder[bType]) {
+        return typeOrder[aType] - typeOrder[bType];
+      }
+
+      // Within same type, sort alphabetically by name
+      return a.name.localeCompare(b.name);
+    });
+
     logInfo(
-      `Successfully retrieved ${resourceCount} dashboards from Metabase (source: ${dashboardsResponse.source})`
+      `Successfully retrieved ${sortedResources.length} total resources from ${totalResourceCount} available items across all types`
     );
 
-    // Return dashboards as resources
-    const resources: Resource[] = dashboardsResponse.data.map((dashboard: any) => ({
-      uri: `metabase://dashboard/${dashboard.id}`,
-      mimeType: 'application/json',
-      name: dashboard.name,
-      description: `Metabase dashboard: ${dashboard.name}`,
-    }));
-
-    return { resources };
+    return { resources: sortedResources };
   } catch (error) {
-    logError('Failed to retrieve dashboards from Metabase', error);
+    logError('Failed to retrieve Metabase resources', error);
     throw new McpError(ErrorCode.InternalError, 'Failed to retrieve Metabase resources');
   }
 }
