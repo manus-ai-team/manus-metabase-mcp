@@ -12,12 +12,21 @@ import {
   saveRawStructure,
   validatePositiveInteger,
   validateEnumValue,
+  parseAndValidatePositiveInteger,
+  parseAndValidateNonNegativeInteger,
 } from '../../utils/index.js';
-import { MAX_IDS_PER_REQUEST, CONCURRENCY_LIMITS, SAVE_RAW_STRUCTURES } from './types.js';
+import {
+  MAX_IDS_PER_REQUEST,
+  MAX_DATABASE_IDS_PER_REQUEST,
+  CONCURRENCY_LIMITS,
+  SAVE_RAW_STRUCTURES,
+  OPTIMIZATION_THRESHOLDS,
+} from './types.js';
 import {
   optimizeCardResponse,
   optimizeDashboardResponse,
   optimizeTableResponse,
+  OptimizationLevel,
   optimizeDatabaseResponse,
   optimizeCollectionResponse,
   optimizeFieldResponse,
@@ -32,7 +41,7 @@ export async function handleRetrieve(
   logWarn: (message: string, data?: unknown, error?: Error) => void,
   logError: (message: string, data?: unknown) => void
 ) {
-  const { model, ids } = request.params?.arguments || {};
+  const { model, ids, table_offset, table_limit } = request.params?.arguments || {};
 
   // Validate required parameters
   if (!model) {
@@ -53,18 +62,6 @@ export async function handleRetrieve(
     );
   }
 
-  // Validate maximum number of IDs to prevent abuse and ensure reasonable response times
-  if (ids.length > MAX_IDS_PER_REQUEST) {
-    logWarn(`Too many IDs requested: ${ids.length}. Maximum allowed: ${MAX_IDS_PER_REQUEST}`, {
-      requestId,
-    });
-    throw ValidationErrorFactory.invalidParameter(
-      'ids',
-      `${ids.length} items`,
-      `Maximum allowed: ${MAX_IDS_PER_REQUEST} per request. For larger datasets, please make multiple requests.`
-    );
-  }
-
   // Validate model type with case insensitive handling
   const supportedModels = [
     'card',
@@ -77,11 +74,72 @@ export async function handleRetrieve(
 
   const validatedModel = validateEnumValue(model, supportedModels, 'model', requestId, logWarn);
 
+  // Validate maximum number of IDs based on model type
+  const maxIds = validatedModel === 'database' ? MAX_DATABASE_IDS_PER_REQUEST : MAX_IDS_PER_REQUEST;
+  if (ids.length > maxIds) {
+    logWarn(
+      `Too many IDs requested: ${ids.length}. Maximum allowed for ${validatedModel}: ${maxIds}`,
+      {
+        requestId,
+      }
+    );
+    throw ValidationErrorFactory.invalidParameter(
+      'ids',
+      `${ids.length} items`,
+      validatedModel === 'database'
+        ? `Maximum allowed: ${maxIds} databases per request due to large metadata. For more databases, please make multiple requests.`
+        : `Maximum allowed: ${maxIds} per request. For larger datasets, please make multiple requests.`
+    );
+  }
+
   // Validate all IDs are positive integers
   const numericIds: number[] = [];
   for (const id of ids) {
     validatePositiveInteger(id, 'id', requestId, logWarn);
     numericIds.push(id as number);
+  }
+
+  // Validate pagination parameters for database model
+  let paginationOffset = 0;
+  let paginationLimit: number | undefined = undefined;
+
+  if (validatedModel === 'database') {
+    if (table_offset !== undefined) {
+      paginationOffset = parseAndValidateNonNegativeInteger(
+        table_offset,
+        'table_offset',
+        requestId,
+        logWarn
+      );
+    }
+
+    if (table_limit !== undefined) {
+      paginationLimit = parseAndValidatePositiveInteger(
+        table_limit,
+        'table_limit',
+        requestId,
+        logWarn
+      );
+
+      if (paginationLimit > 100) {
+        logWarn('table_limit too large, maximum is 100', {
+          requestId,
+          table_limit: paginationLimit,
+        });
+        throw ValidationErrorFactory.invalidParameter(
+          'table_limit',
+          `${paginationLimit}`,
+          'Maximum allowed: 100 tables per page'
+        );
+      }
+    }
+  } else if (table_offset !== undefined || table_limit !== undefined) {
+    logWarn('table_offset and table_limit are only valid for database model', { requestId });
+    throw ValidationErrorFactory.invalidParameter(
+      'table_offset/table_limit',
+      'provided for non-database model',
+      'table_offset and table_limit parameters are only supported for the database model'
+    );
   }
 
   logDebug(`Retrieving ${validatedModel} details for IDs: ${numericIds.join(', ')}`);
@@ -110,8 +168,16 @@ export async function handleRetrieve(
           ? CONCURRENCY_LIMITS.MEDIUM_BATCH_SIZE
           : CONCURRENCY_LIMITS.LARGE_BATCH_SIZE;
 
+    // Determine optimization level based on request size to manage token usage
+    const optimizationLevel =
+      numericIds.length >= OPTIMIZATION_THRESHOLDS.ULTRA_MINIMAL_THRESHOLD
+        ? OptimizationLevel.ULTRA_MINIMAL
+        : numericIds.length >= OPTIMIZATION_THRESHOLDS.AGGRESSIVE_OPTIMIZATION_THRESHOLD
+          ? OptimizationLevel.AGGRESSIVE
+          : OptimizationLevel.STANDARD;
+
     logDebug(
-      `Processing ${numericIds.length} ${validatedModel}(s) with concurrency limit: ${CONCURRENT_LIMIT}`
+      `Processing ${numericIds.length} ${validatedModel}(s) with concurrency limit: ${CONCURRENT_LIMIT}, optimization level: ${optimizationLevel}`
     );
 
     // Process requests concurrently with controlled concurrency to balance performance and server load
@@ -154,35 +220,55 @@ export async function handleRetrieve(
 
         // Optimize responses to reduce token usage
         if (validatedModel === 'card') {
-          result = optimizeCardResponse({
-            id,
-            ...response.data,
-          });
+          result = optimizeCardResponse(
+            {
+              id,
+              ...response.data,
+            },
+            optimizationLevel
+          );
         } else if (validatedModel === 'dashboard') {
-          result = optimizeDashboardResponse({
-            id,
-            ...response.data,
-          });
+          result = optimizeDashboardResponse(
+            {
+              id,
+              ...response.data,
+            },
+            optimizationLevel
+          );
         } else if (validatedModel === 'table') {
-          result = optimizeTableResponse({
-            id,
-            ...response.data,
-          });
+          result = optimizeTableResponse(
+            {
+              id,
+              ...response.data,
+            },
+            optimizationLevel
+          );
         } else if (validatedModel === 'database') {
-          result = optimizeDatabaseResponse({
-            id,
-            ...response.data,
-          });
+          result = optimizeDatabaseResponse(
+            {
+              id,
+              ...response.data,
+            },
+            optimizationLevel,
+            paginationOffset,
+            paginationLimit
+          );
         } else if (validatedModel === 'collection') {
-          result = optimizeCollectionResponse({
-            id,
-            ...response.data,
-          });
+          result = optimizeCollectionResponse(
+            {
+              id,
+              ...response.data,
+            },
+            optimizationLevel
+          );
         } else if (validatedModel === 'field') {
-          result = optimizeFieldResponse({
-            id,
-            ...response.data,
-          });
+          result = optimizeFieldResponse(
+            {
+              id,
+              ...response.data,
+            },
+            optimizationLevel
+          );
         } else {
           result = {
             id,
@@ -363,8 +449,13 @@ export async function handleRetrieve(
           'Table metadata includes optimized column information, data types, and relationships. Use fields[] array to understand table schema and construct queries. Response excludes heavy fingerprint statistics for better performance.';
         break;
       case 'database':
-        response.usage_guidance =
-          'Database details include optimized connection info and available tables. Use tables[] array to see all tables, then retrieve with model="table" for detailed table metadata. Response excludes features array for better performance.';
+        if (paginationLimit !== undefined) {
+          response.usage_guidance =
+            'Database details include paginated table information. Use table_offset and table_limit parameters for pagination when dealing with large databases that exceed token limits. Use tables[] array to see available tables, then retrieve with model="table" for detailed table metadata.';
+        } else {
+          response.usage_guidance =
+            'Database details include optimized connection info and available tables. Use tables[] array to see all tables, then retrieve with model="table" for detailed table metadata. For large databases exceeding token limits, use table_offset and table_limit parameters for pagination.';
+        }
         break;
       case 'collection':
         response.usage_guidance =
@@ -383,11 +474,40 @@ export async function handleRetrieve(
 
     logInfo(logMessage);
 
+    // Monitor response size for token usage optimization feedback
+    const responseText = JSON.stringify(response, null, 2);
+    const responseSizeChars = responseText.length;
+    const estimatedTokens = Math.ceil(responseSizeChars / 4); // Rough estimation: ~4 chars per token
+
+    // Log warnings for large responses
+    if (estimatedTokens > 20000) {
+      logWarn(
+        `Large response detected: ~${estimatedTokens} tokens (${responseSizeChars} chars) for ${numericIds.length} ${validatedModel}(s). Consider using smaller batch sizes for better performance.`,
+        {
+          requestId,
+          responseSize: responseSizeChars,
+          estimatedTokens,
+          optimizationLevel,
+          itemCount: numericIds.length,
+        }
+      );
+    } else if (estimatedTokens > 15000) {
+      logDebug(
+        `Moderate response size: ~${estimatedTokens} tokens (${responseSizeChars} chars) for ${numericIds.length} ${validatedModel}(s)`,
+        {
+          requestId,
+          responseSize: responseSizeChars,
+          estimatedTokens,
+          optimizationLevel,
+        }
+      );
+    }
+
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(response, null, 2),
+          text: responseText,
         },
       ],
     };

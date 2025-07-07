@@ -148,8 +148,8 @@ export interface OptimizedTable {
   display_name: string;
   entity_type: string;
   active: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   field_order: string;
   is_upload: boolean;
   initial_sync_status: string;
@@ -229,6 +229,14 @@ export interface OptimizedDatabase {
     updated_at: string;
     estimated_row_count?: number;
   }>;
+  pagination?: {
+    total_tables: number;
+    table_offset: number;
+    table_limit: number;
+    current_page_size: number;
+    has_more: boolean;
+    next_offset?: number;
+  };
   retrieved_at: string;
 }
 

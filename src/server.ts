@@ -354,7 +354,7 @@ export class MetabaseServer {
           {
             name: 'retrieve',
             description:
-              'Fetch additional details for supported models (Cards, Dashboards, Tables, Databases, Collections, Fields). Supports multiple IDs (max 50 per request) with intelligent concurrent processing and optimized caching.',
+              'Fetch additional details for supported models (Cards, Dashboards, Tables, Databases, Collections, Fields). Supports multiple IDs (max 50 per request) with intelligent concurrent processing and optimized caching. Includes table pagination for large databases exceeding token limits.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -374,6 +374,19 @@ export class MetabaseServer {
                   minItems: 1,
                   maxItems: 50,
                 },
+                table_offset: {
+                  type: 'number',
+                  description:
+                    'Starting offset for table pagination (database model only). Use with table_limit for paginating through large databases that exceed token limits.',
+                  minimum: 0,
+                },
+                table_limit: {
+                  type: 'number',
+                  description:
+                    'Maximum number of tables to return per page (database model only). Maximum 100 tables per page. Use with table_offset for pagination.',
+                  minimum: 1,
+                  maximum: 100,
+                },
               },
               required: ['model', 'ids'],
             },
@@ -382,7 +395,7 @@ export class MetabaseServer {
           {
             name: 'list',
             description:
-              'Fetch all records for a single Metabase resource type with highly optimized responses for overview purposes. Retrieves complete lists of cards, dashboards, tables, databases, or collections. Returns only essential identifier fields for efficient browsing and includes intelligent caching for performance.',
+              'Fetch all records for a single Metabase resource type with highly optimized responses for overview purposes. Retrieves complete lists of cards, dashboards, tables, databases, or collections. Returns only essential identifier fields for efficient browsing and includes intelligent caching for performance. Supports pagination for large datasets exceeding token limits.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -391,6 +404,19 @@ export class MetabaseServer {
                   enum: ['cards', 'dashboards', 'tables', 'databases', 'collections'],
                   description:
                     'Model type to list ALL records for. Supported models: cards (all questions/queries), dashboards (all dashboards), tables (all database tables), databases (all connected databases), collections (all folders/collections). Only one model type allowed per request for optimal performance.',
+                },
+                offset: {
+                  type: 'number',
+                  description:
+                    'Starting offset for pagination. Use with limit for paginating through large datasets that exceed token limits.',
+                  minimum: 0,
+                },
+                limit: {
+                  type: 'number',
+                  description:
+                    'Maximum number of items to return per page. Maximum 1000 items per page. Use with offset for pagination.',
+                  minimum: 1,
+                  maximum: 1000,
                 },
               },
               required: ['model'],

@@ -2,7 +2,13 @@ import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../../api.js';
 import { ErrorCode, McpError } from '../../types/core.js';
-import { handleApiError, validateEnumValue } from '../../utils/index.js';
+import {
+  handleApiError,
+  validateEnumValue,
+  parseAndValidatePositiveInteger,
+  parseAndValidateNonNegativeInteger,
+} from '../../utils/index.js';
+import { ValidationErrorFactory } from '../../utils/errorFactory.js';
 import {
   optimizeCardForList,
   optimizeDashboardForList,
@@ -20,7 +26,7 @@ export async function handleList(
   logWarn: (message: string, data?: unknown, error?: Error) => void,
   logError: (message: string, data?: unknown) => void
 ) {
-  const { model } = request.params?.arguments || {};
+  const { model, offset, limit } = request.params?.arguments || {};
 
   // Validate required parameters
   if (!model || typeof model !== 'string') {
@@ -36,7 +42,30 @@ export async function handleList(
 
   const validatedModel = validateEnumValue(model, supportedModels, 'model', requestId, logWarn);
 
-  logDebug(`Listing ${validatedModel} from Metabase`);
+  // Validate pagination parameters
+  let paginationOffset = 0;
+  let paginationLimit: number | undefined = undefined;
+
+  if (offset !== undefined) {
+    paginationOffset = parseAndValidateNonNegativeInteger(offset, 'offset', requestId, logWarn);
+  }
+
+  if (limit !== undefined) {
+    paginationLimit = parseAndValidatePositiveInteger(limit, 'limit', requestId, logWarn);
+
+    if (paginationLimit > 1000) {
+      logWarn('limit too large, maximum is 1000', { requestId, limit: paginationLimit });
+      throw ValidationErrorFactory.invalidParameter(
+        'limit',
+        `${paginationLimit}`,
+        'Maximum allowed: 1000 items per page'
+      );
+    }
+  }
+
+  logDebug(
+    `Listing ${validatedModel} from Metabase ${paginationLimit ? `(paginated: offset=${paginationOffset}, limit=${paginationLimit})` : '(all items)'}`
+  );
 
   try {
     const startTime = Date.now();
@@ -96,10 +125,34 @@ export async function handleList(
 
     // Optimize each item for list view
     const optimizedItems = apiResponse.map(optimizeFunction);
-    const totalItems = optimizedItems.length;
+    const totalItemsBeforePagination = optimizedItems.length;
+
+    // Apply pagination if specified
+    let paginatedItems = optimizedItems;
+    let paginationMetadata: any = undefined;
+
+    if (paginationLimit !== undefined) {
+      const startIndex = paginationOffset;
+      const endIndex = paginationOffset + paginationLimit;
+      paginatedItems = optimizedItems.slice(startIndex, endIndex);
+
+      // Add pagination metadata
+      paginationMetadata = {
+        total_items: totalItemsBeforePagination,
+        offset: paginationOffset,
+        limit: paginationLimit,
+        current_page_size: paginatedItems.length,
+        has_more: endIndex < totalItemsBeforePagination,
+        next_offset: endIndex < totalItemsBeforePagination ? endIndex : undefined,
+      };
+    }
+
+    const totalItems = paginatedItems.length;
     const totalTime = Date.now() - startTime;
 
-    logDebug(`Successfully fetched ${optimizedItems.length} ${validatedModel}`);
+    logDebug(
+      `Successfully fetched ${totalItemsBeforePagination} ${validatedModel}${paginationLimit ? ` (returning ${totalItems} paginated items)` : ''}`
+    );
 
     // Create response object
     const response: any = {
@@ -119,14 +172,24 @@ export async function handleList(
           totalItems > 0 ? Math.round((totalTime - fetchTime) / totalItems) : 0,
       },
       retrieved_at: new Date().toISOString(),
-      results: optimizedItems,
+      results: paginatedItems,
     };
+
+    // Add pagination metadata if pagination was used
+    if (paginationMetadata) {
+      response.pagination = paginationMetadata;
+    }
 
     response.message = `Successfully listed ${totalItems} ${validatedModel} (source: ${dataSource}).`;
 
     // Add usage guidance
-    response.usage_guidance =
-      'This list provides an overview of available items. Use retrieve() with specific model types and IDs to get detailed information for further operations like execute_query.';
+    if (paginationLimit !== undefined) {
+      response.usage_guidance =
+        'This list provides a paginated overview of available items. Use offset and limit parameters for pagination when dealing with large datasets that exceed token limits. Use retrieve() with specific model types and IDs to get detailed information for further operations like execute_query.';
+    } else {
+      response.usage_guidance =
+        'This list provides an overview of available items. Use retrieve() with specific model types and IDs to get detailed information for further operations like execute_query. For large datasets exceeding token limits, use offset and limit parameters for pagination.';
+    }
 
     // Add model-specific recommendation
     switch (validatedModel) {

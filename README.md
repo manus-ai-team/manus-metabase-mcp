@@ -33,12 +33,14 @@ The server exposes the following optimized tools for AI assistants:
 - **`list`**: Fetch ALL records for a single resource type with highly optimized responses
   - Supports: `cards`, `dashboards`, `tables`, `databases`, `collections`
   - Returns only essential identifier fields for efficient browsing
+  - **Pagination support** for large datasets exceeding token limits (offset/limit parameters)
   - Intelligent caching with performance metrics
 
 - **`retrieve`**: Get detailed information for specific items by ID
   - Supports: `card`, `dashboard`, `table`, `database`, `collection`, `field`
   - Concurrent processing with controlled batch sizes
   - Aggressive response optimization (75-90% token reduction)*
+  - **Table pagination** for large databases exceeding 25k token limits
 
 - **`search`**: Unified search across all Metabase items using native search API
   - Supports all model types with advanced filtering
@@ -68,6 +70,7 @@ The server exposes the following optimized tools for AI assistants:
   - List caches: `cards-list`, `dashboards-list`, `tables-list`, `databases-list`, `collections-list`
   - Bulk operations: `all`, `all-individual`, `all-lists`
 
+
 ## Performance Optimizations
 
 ### Response Optimization
@@ -79,6 +82,7 @@ The server exposes the following optimized tools for AI assistants:
 - **Fields**: ~75% reduction (15,000+ → 3,000-4,000 characters)*
 
 *Token reduction figures are based on typical Metabase responses and may vary depending on your specific data structure and configuration.
+
 
 ### Caching System
 - **Multi-layer Caching**: Separate caches for individual items and bulk lists
@@ -277,10 +281,16 @@ To integrate with Claude Desktop, you'll need to configure the MCP server in Cla
 // Get overview of all cards
 list({ model: "cards" })
 
+// Get first 100 cards with pagination (for large datasets)
+list({ model: "cards", limit: 100 })
+
+// Get next page of cards  
+list({ model: "cards", offset: 100, limit: 100 })
+
 // Get overview of all dashboards
 list({ model: "dashboards" })
 
-// Get overview of all tables
+// Get overview of all tables  
 list({ model: "tables" })
 
 // Get overview of all databases
@@ -300,6 +310,12 @@ retrieve({ model: "dashboard", ids: [42] })
 
 // Get table schema information
 retrieve({ model: "table", ids: [10, 11] })
+
+// Get database information (supports pagination for large databases)
+retrieve({ model: "database", ids: [3] })
+
+// For large databases, use pagination
+retrieve({ model: "database", ids: [3], table_limit: 20, table_offset: 0 })
 ```
 
 ### Advanced Search

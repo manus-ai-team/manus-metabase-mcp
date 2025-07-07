@@ -44,6 +44,80 @@ export function validatePositiveInteger(
 }
 
 /**
+ * Parse and validate positive integer with detailed error message
+ */
+export function parseAndValidatePositiveInteger(
+  value: unknown,
+  fieldName: string,
+  requestId: string,
+  logWarn: (message: string, data?: unknown, error?: Error) => void
+): number {
+  // Try to coerce to number if it's a string
+  let numValue: number;
+  if (typeof value === 'string') {
+    numValue = parseInt(value, 10);
+    if (isNaN(numValue)) {
+      logWarn(`Invalid ${fieldName} parameter - cannot parse as number`, { requestId, value });
+      throw new McpError(ErrorCode.InvalidParams, `${fieldName} must be a number`);
+    }
+  } else if (typeof value === 'number') {
+    numValue = value;
+  } else {
+    logWarn(`Invalid ${fieldName} parameter - must be a number`, { requestId, value });
+    throw new McpError(ErrorCode.InvalidParams, `${fieldName} must be a number`);
+  }
+
+  if (!Number.isInteger(numValue)) {
+    logWarn(`Invalid ${fieldName} parameter - must be an integer`, { requestId, value });
+    throw new McpError(ErrorCode.InvalidParams, `${fieldName} must be an integer`);
+  }
+
+  if (numValue <= 0) {
+    logWarn(`Invalid ${fieldName} parameter - must be a positive number`, { requestId, value });
+    throw new McpError(ErrorCode.InvalidParams, `${fieldName} must be a positive number`);
+  }
+
+  return numValue;
+}
+
+/**
+ * Parse and validate non-negative integer (>= 0) with detailed error message
+ */
+export function parseAndValidateNonNegativeInteger(
+  value: unknown,
+  fieldName: string,
+  requestId: string,
+  logWarn: (message: string, data?: unknown, error?: Error) => void
+): number {
+  // Try to coerce to number if it's a string
+  let numValue: number;
+  if (typeof value === 'string') {
+    numValue = parseInt(value, 10);
+    if (isNaN(numValue)) {
+      logWarn(`Invalid ${fieldName} parameter - cannot parse as number`, { requestId, value });
+      throw new McpError(ErrorCode.InvalidParams, `${fieldName} must be a number`);
+    }
+  } else if (typeof value === 'number') {
+    numValue = value;
+  } else {
+    logWarn(`Invalid ${fieldName} parameter - must be a number`, { requestId, value });
+    throw new McpError(ErrorCode.InvalidParams, `${fieldName} must be a number`);
+  }
+
+  if (!Number.isInteger(numValue)) {
+    logWarn(`Invalid ${fieldName} parameter - must be an integer`, { requestId, value });
+    throw new McpError(ErrorCode.InvalidParams, `${fieldName} must be an integer`);
+  }
+
+  if (numValue < 0) {
+    logWarn(`Invalid ${fieldName} parameter - must be non-negative`, { requestId, value });
+    throw new McpError(ErrorCode.InvalidParams, `${fieldName} must be non-negative (>= 0)`);
+  }
+
+  return numValue;
+}
+
+/**
  * Validate non-empty string with detailed error message
  */
 export function validateNonEmptyString(
