@@ -1,17 +1,21 @@
 import { MetabaseApiClient } from '../../api.js';
-import { handleApiError } from '../../utils.js';
+import { handleApiError, validatePositiveInteger } from '../../utils/index.js';
 import { CardExecutionParams, ExecutionResponse } from './types.js';
 
 export async function executeCard(
   params: CardExecutionParams,
-  _requestId: string,
+  requestId: string,
   apiClient: MetabaseApiClient,
   logDebug: (message: string, data?: unknown) => void,
   logInfo: (message: string, data?: unknown) => void,
-  _logWarn: (message: string, data?: unknown, error?: Error) => void,
+  logWarn: (message: string, data?: unknown, error?: Error) => void,
   logError: (message: string, error: unknown) => void
 ): Promise<ExecutionResponse> {
   const { cardId, cardParameters, rowLimit } = params;
+
+  // Validate positive integer parameters
+  validatePositiveInteger(cardId, 'card_id', requestId, logWarn);
+  validatePositiveInteger(rowLimit, 'row_limit', requestId, logWarn);
 
   logDebug(`Executing card ID: ${cardId} with row limit: ${rowLimit}`);
 
@@ -105,10 +109,11 @@ export async function executeCard(
         resourceId: cardId,
         customMessages: {
           '400':
-            'Invalid card parameters or card configuration error. Check that the card exists and all required parameters are provided.',
-          '404': 'Card not found. Verify the card ID exists and you have permission to access it.',
+            "Invalid card parameters or card configuration error. Check that the card exists and all required parameters are provided. If parameter issues persist, consider using execute_query with the card's underlying SQL query instead, which offers more reliable parameter handling.",
+          '404':
+            'Card not found. Verify the card ID exists and you have permission to access it. Alternatively, use execute_query to run the SQL query directly against the database.',
           '500':
-            'Database server error. The card query may have caused a timeout or database issue.',
+            "Database server error. The card query may have caused a timeout or database issue. Try using execute_query with the card's SQL query for better error handling and debugging capabilities.",
         },
       },
       logError

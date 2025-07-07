@@ -43,6 +43,10 @@ export interface OptimizedCard {
     type: string;
     slug: string;
     target?: any;
+    values_source_type?: string;
+    values_source_config?: {
+      values?: string[];
+    };
   }>;
   view_count?: number;
   query_average_duration?: number;
@@ -96,6 +100,10 @@ export interface OptimizedDashboard {
         type: string;
         slug: string;
         target?: any;
+        values_source_type?: string;
+        values_source_config?: {
+          values?: string[];
+        };
       }>;
     };
   }>;
@@ -105,6 +113,10 @@ export interface OptimizedDashboard {
     type: string;
     slug: string;
     sectionId?: string;
+    values_source_type?: string;
+    values_source_config?: {
+      values?: string[];
+    };
   }>;
   tabs?: Array<any>;
   width?: string;
@@ -136,8 +148,8 @@ export interface OptimizedTable {
   display_name: string;
   entity_type: string;
   active: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   field_order: string;
   is_upload: boolean;
   initial_sync_status: string;
@@ -217,6 +229,14 @@ export interface OptimizedDatabase {
     updated_at: string;
     estimated_row_count?: number;
   }>;
+  pagination?: {
+    total_tables: number;
+    table_offset: number;
+    table_limit: number;
+    current_page_size: number;
+    has_more: boolean;
+    next_offset?: number;
+  };
   retrieved_at: string;
 }
 

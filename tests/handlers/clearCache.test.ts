@@ -27,7 +27,26 @@ describe('handleClearCache', () => {
 
       expect(mockLogger.logWarn).toHaveBeenCalledWith(
         'Invalid cache_type parameter: invalid',
-        expect.objectContaining({ validTypes: expect.any(Array) })
+        expect.objectContaining({ 
+          requestId: 'clearCache',
+          validValues: expect.any(Array) 
+        })
+      );
+    });
+
+    it('should throw error when cache_type is non-string', () => {
+      const request = createMockRequest('clear_cache', { cache_type: 123 });
+
+      expect(() => {
+        handleClearCache(request, mockApiClient as any, mockLogger.logInfo, mockLogger.logWarn, mockLogger.logError);
+      }).toThrow(McpError);
+
+      expect(mockLogger.logWarn).toHaveBeenCalledWith(
+        'Invalid cache_type parameter - must be a string',
+        expect.objectContaining({ 
+          requestId: 'clearCache',
+          value: 123
+        })
       );
     });
   });

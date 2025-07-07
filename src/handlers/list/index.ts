@@ -2,8 +2,13 @@ import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../../api.js';
 import { ErrorCode, McpError } from '../../types/core.js';
-import { handleApiError } from '../../utils.js';
-import { SupportedListModel } from './types.js';
+import {
+  handleApiError,
+  validateEnumValue,
+  parseAndValidatePositiveInteger,
+  parseAndValidateNonNegativeInteger,
+} from '../../utils/index.js';
+import { ValidationErrorFactory } from '../../utils/errorFactory.js';
 import {
   optimizeCardForList,
   optimizeDashboardForList,
@@ -21,7 +26,7 @@ export async function handleList(
   logWarn: (message: string, data?: unknown, error?: Error) => void,
   logError: (message: string, data?: unknown) => void
 ) {
-  const { model } = request.params?.arguments || {};
+  const { model, offset, limit } = request.params?.arguments || {};
 
   // Validate required parameters
   if (!model || typeof model !== 'string') {
@@ -32,23 +37,35 @@ export async function handleList(
     );
   }
 
-  // Validate model type
-  const supportedModels: SupportedListModel[] = [
-    'cards',
-    'dashboards',
-    'tables',
-    'databases',
-    'collections',
-  ];
-  if (!supportedModels.includes(model as SupportedListModel)) {
-    logWarn(`Invalid model type: ${model}`, { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      `Invalid model type: ${model}. Supported models: ${supportedModels.join(', ')}`
-    );
+  // Validate model type with case insensitive handling
+  const supportedModels = ['cards', 'dashboards', 'tables', 'databases', 'collections'] as const;
+
+  const validatedModel = validateEnumValue(model, supportedModels, 'model', requestId, logWarn);
+
+  // Validate pagination parameters
+  let paginationOffset = 0;
+  let paginationLimit: number | undefined = undefined;
+
+  if (offset !== undefined) {
+    paginationOffset = parseAndValidateNonNegativeInteger(offset, 'offset', requestId, logWarn);
   }
 
-  logDebug(`Listing ${model} from Metabase`);
+  if (limit !== undefined) {
+    paginationLimit = parseAndValidatePositiveInteger(limit, 'limit', requestId, logWarn);
+
+    if (paginationLimit > 1000) {
+      logWarn('limit too large, maximum is 1000', { requestId, limit: paginationLimit });
+      throw ValidationErrorFactory.invalidParameter(
+        'limit',
+        `${paginationLimit}`,
+        'Maximum allowed: 1000 items per page'
+      );
+    }
+  }
+
+  logDebug(
+    `Listing ${validatedModel} from Metabase ${paginationLimit ? `(paginated: offset=${paginationOffset}, limit=${paginationLimit})` : '(all items)'}`
+  );
 
   try {
     const startTime = Date.now();
@@ -57,7 +74,7 @@ export async function handleList(
     let dataSource: 'cache' | 'api';
     let fetchTime: number;
 
-    switch (model as SupportedListModel) {
+    switch (validatedModel) {
       case 'cards': {
         optimizeFunction = optimizeCardForList;
         const cardsResponse = await apiClient.getCardsList();
@@ -99,24 +116,48 @@ export async function handleList(
         break;
       }
       default:
-        throw new Error(`Unsupported model: ${model}`);
+        throw new Error(`Unsupported model: ${validatedModel}`);
     }
 
     logDebug(
-      `Fetching ${model} from ${dataSource} (${dataSource === 'api' ? 'fresh data' : 'cached data'})`
+      `Fetching ${validatedModel} from ${dataSource} (${dataSource === 'api' ? 'fresh data' : 'cached data'})`
     );
 
     // Optimize each item for list view
     const optimizedItems = apiResponse.map(optimizeFunction);
-    const totalItems = optimizedItems.length;
+    const totalItemsBeforePagination = optimizedItems.length;
+
+    // Apply pagination if specified
+    let paginatedItems = optimizedItems;
+    let paginationMetadata: any = undefined;
+
+    if (paginationLimit !== undefined) {
+      const startIndex = paginationOffset;
+      const endIndex = paginationOffset + paginationLimit;
+      paginatedItems = optimizedItems.slice(startIndex, endIndex);
+
+      // Add pagination metadata
+      paginationMetadata = {
+        total_items: totalItemsBeforePagination,
+        offset: paginationOffset,
+        limit: paginationLimit,
+        current_page_size: paginatedItems.length,
+        has_more: endIndex < totalItemsBeforePagination,
+        next_offset: endIndex < totalItemsBeforePagination ? endIndex : undefined,
+      };
+    }
+
+    const totalItems = paginatedItems.length;
     const totalTime = Date.now() - startTime;
 
-    logDebug(`Successfully fetched ${optimizedItems.length} ${model}`);
+    logDebug(
+      `Successfully fetched ${totalItemsBeforePagination} ${validatedModel}${paginationLimit ? ` (returning ${totalItems} paginated items)` : ''}`
+    );
 
     // Create response object
     const response: any = {
       request_id: requestId,
-      model: model,
+      model: validatedModel,
       total_items: totalItems,
       data_source: {
         source: dataSource,
@@ -131,17 +172,27 @@ export async function handleList(
           totalItems > 0 ? Math.round((totalTime - fetchTime) / totalItems) : 0,
       },
       retrieved_at: new Date().toISOString(),
-      results: optimizedItems,
+      results: paginatedItems,
     };
 
-    response.message = `Successfully listed ${totalItems} ${model} (source: ${dataSource}).`;
+    // Add pagination metadata if pagination was used
+    if (paginationMetadata) {
+      response.pagination = paginationMetadata;
+    }
+
+    response.message = `Successfully listed ${totalItems} ${validatedModel} (source: ${dataSource}).`;
 
     // Add usage guidance
-    response.usage_guidance =
-      'This list provides an overview of available items. Use retrieve() with specific model types and IDs to get detailed information for further operations like execute_query.';
+    if (paginationLimit !== undefined) {
+      response.usage_guidance =
+        'This list provides a paginated overview of available items. Use offset and limit parameters for pagination when dealing with large datasets that exceed token limits. Use retrieve() with specific model types and IDs to get detailed information for further operations like execute_query.';
+    } else {
+      response.usage_guidance =
+        'This list provides an overview of available items. Use retrieve() with specific model types and IDs to get detailed information for further operations like execute_query. For large datasets exceeding token limits, use offset and limit parameters for pagination.';
+    }
 
     // Add model-specific recommendation
-    switch (model as SupportedListModel) {
+    switch (validatedModel) {
       case 'cards':
         response.recommendation =
           'Use retrieve(model="card", ids=[...]) to get SQL queries and execute them with execute_query()';
@@ -164,7 +215,7 @@ export async function handleList(
         break;
     }
 
-    logInfo(`Successfully listed ${totalItems} ${model}`);
+    logInfo(`Successfully listed ${totalItems} ${validatedModel}`);
 
     return {
       content: [
@@ -178,12 +229,12 @@ export async function handleList(
     throw handleApiError(
       error,
       {
-        operation: `List ${model}`,
-        resourceType: model,
+        operation: `List ${validatedModel}`,
+        resourceType: validatedModel,
         customMessages: {
           '400': `Invalid list parameters. Ensure model type is valid.`,
-          '404': `List endpoint not found for ${model}. Check that the model type is supported.`,
-          '500': `Metabase server error while listing ${model}. The server may be experiencing issues.`,
+          '404': `List endpoint not found for ${validatedModel}. Check that the model type is supported.`,
+          '500': `Metabase server error while listing ${validatedModel}. The server may be experiencing issues.`,
         },
       },
       logError

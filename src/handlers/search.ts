@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MetabaseApiClient } from '../api.js';
 import { ErrorCode, McpError } from '../types/core.js';
-import { handleApiError } from '../utils.js';
+import { ValidationErrorFactory } from '../utils/errorFactory.js';
+import { handleApiError, validatePositiveInteger, validateEnumValue } from '../utils/index.js';
 
 export async function handleSearch(
   request: z.infer<typeof CallToolRequestSchema>,
@@ -24,11 +25,33 @@ export async function handleSearch(
   const databaseId = request.params?.arguments?.database_id as number | undefined;
   const verified = request.params?.arguments?.verified as boolean | undefined;
 
+  // Validate positive integer parameters
+  if (maxResults !== undefined) {
+    validatePositiveInteger(maxResults, 'max_results', requestId, logWarn);
+  }
+  if (databaseId !== undefined) {
+    validatePositiveInteger(databaseId, 'database_id', requestId, logWarn);
+  }
+  if (ids !== undefined && ids.length > 0) {
+    ids.forEach((id, index) => {
+      validatePositiveInteger(id, `ids[${index}]`, requestId, logWarn);
+    });
+  }
+
+  // Validate models parameter with case insensitive handling
+  if (models && models.length > 0) {
+    const supportedModels = ['card', 'dashboard', 'table', 'database', 'collection'] as const;
+    models.forEach((model, index) => {
+      validateEnumValue(model, supportedModels, `models[${index}]`, requestId, logWarn);
+    });
+  }
+
   // Updated validation: allow searching without query/id if database_id is provided
   if (!searchQuery && (!ids || ids.length === 0) && !databaseId) {
     logWarn('Missing query, ids, or database_id parameter in search request', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
+    throw ValidationErrorFactory.invalidParameter(
+      'query_or_ids_or_database_id',
+      'none provided',
       'Either search query, ids parameter, or database_id is required'
     );
   }
@@ -36,8 +59,9 @@ export async function handleSearch(
   // Validate that only one search method is used
   if (searchQuery && ids && ids.length > 0) {
     logWarn('Cannot use both query and ids parameters simultaneously', { requestId });
-    throw new McpError(
-      ErrorCode.InvalidParams,
+    throw ValidationErrorFactory.invalidParameter(
+      'query_and_ids',
+      'both provided',
       'Cannot use both query and ids parameters - use either search query OR ids, not both'
     );
   }

@@ -8,10 +8,22 @@ import {
 } from '../../types/optimized.js';
 
 /**
+ * Optimization levels for controlling response size vs. context
+ */
+export enum OptimizationLevel {
+  STANDARD = 'standard', // Default optimization - preserves all useful context
+  AGGRESSIVE = 'aggressive', // Removes non-essential metadata for bulk operations
+  ULTRA_MINIMAL = 'ultra_minimal', // Minimal response for very large datasets
+}
+
+/**
  * Optimize card response by removing unnecessary fields that consume tokens
  * but aren't used by other handlers (execute_query, export_query, etc.)
  */
-export function optimizeCardResponse(card: any): OptimizedCard {
+export function optimizeCardResponse(
+  card: any,
+  optimizationLevel: OptimizationLevel = OptimizationLevel.STANDARD
+): OptimizedCard {
   const optimized: OptimizedCard = {
     id: card.id,
     name: card.name,
@@ -19,12 +31,17 @@ export function optimizeCardResponse(card: any): OptimizedCard {
     retrieved_at: new Date().toISOString(),
   };
 
-  // Add optional fields only if they exist and have meaningful values
-  if (card.description) {
+  // Essential fields for all optimization levels
+  // Add description only for standard and aggressive levels
+  if (
+    card.description &&
+    (optimizationLevel === OptimizationLevel.STANDARD ||
+      optimizationLevel === OptimizationLevel.AGGRESSIVE)
+  ) {
     optimized.description = card.description;
   }
 
-  // Essential for execute_query and export_query
+  // Essential for execute_query and export_query - always include
   if (card.dataset_query) {
     optimized.dataset_query = {
       type: card.dataset_query.type,
@@ -54,51 +71,87 @@ export function optimizeCardResponse(card: any): OptimizedCard {
     optimized.can_write = card.can_write;
   }
 
-  if (card.created_at) {
-    optimized.created_at = card.created_at;
+  // Timestamps - include only for standard level to save tokens in bulk operations
+  if (optimizationLevel === OptimizationLevel.STANDARD) {
+    if (card.created_at) {
+      optimized.created_at = card.created_at;
+    }
+
+    if (card.updated_at) {
+      optimized.updated_at = card.updated_at;
+    }
   }
 
-  if (card.updated_at) {
-    optimized.updated_at = card.updated_at;
+  // Creator info - optimize based on level
+  if (card.creator && optimizationLevel !== OptimizationLevel.ULTRA_MINIMAL) {
+    if (optimizationLevel === OptimizationLevel.STANDARD) {
+      optimized.creator = {
+        id: card.creator.id,
+        email: card.creator.email,
+        first_name: card.creator.first_name,
+        last_name: card.creator.last_name,
+      };
+    } else {
+      // Aggressive level - just ID and name for minimal context
+      optimized.creator = {
+        id: card.creator.id,
+        email: card.creator.email,
+        first_name: card.creator.first_name,
+        last_name: card.creator.last_name,
+      };
+    }
   }
 
-  // Minimal creator info
-  if (card.creator) {
-    optimized.creator = {
-      id: card.creator.id,
-      email: card.creator.email,
-      first_name: card.creator.first_name,
-      last_name: card.creator.last_name,
-    };
-  }
-
-  // Minimal collection info
-  if (card.collection) {
-    optimized.collection = {
-      id: card.collection.id,
-      name: card.collection.name,
-      location: card.collection.location,
-    };
+  // Collection info - optimize based on level
+  if (card.collection && optimizationLevel !== OptimizationLevel.ULTRA_MINIMAL) {
+    if (optimizationLevel === OptimizationLevel.STANDARD) {
+      optimized.collection = {
+        id: card.collection.id,
+        name: card.collection.name,
+        location: card.collection.location,
+      };
+    } else {
+      // Aggressive level - just ID and name
+      optimized.collection = {
+        id: card.collection.id,
+        name: card.collection.name,
+      };
+    }
   }
 
   // Essential parameters for query execution
   if (card.parameters && Array.isArray(card.parameters) && card.parameters.length > 0) {
-    optimized.parameters = card.parameters.map((param: any) => ({
-      id: param.id,
-      name: param.name,
-      type: param.type,
-      slug: param.slug,
-      target: param.target,
-    }));
+    optimized.parameters = card.parameters.map((param: any) => {
+      const optimizedParam: any = {
+        id: param.id,
+        name: param.name,
+        type: param.type,
+        slug: param.slug,
+        target: param.target,
+      };
+
+      // Include values source information for parameters with static lists
+      if (param.values_source_type) {
+        optimizedParam.values_source_type = param.values_source_type;
+      }
+
+      if (param.values_source_config) {
+        optimizedParam.values_source_config = param.values_source_config;
+      }
+
+      return optimizedParam;
+    });
   }
 
-  // Analytics data for future use
-  if (card.view_count !== undefined) {
-    optimized.view_count = card.view_count;
-  }
+  // Analytics data - include only for standard level to save tokens in bulk operations
+  if (optimizationLevel === OptimizationLevel.STANDARD) {
+    if (card.view_count !== undefined) {
+      optimized.view_count = card.view_count;
+    }
 
-  if (card.query_average_duration !== undefined) {
-    optimized.query_average_duration = card.query_average_duration;
+    if (card.query_average_duration !== undefined) {
+      optimized.query_average_duration = card.query_average_duration;
+    }
   }
 
   return optimized;
@@ -108,15 +161,22 @@ export function optimizeCardResponse(card: any): OptimizedCard {
  * Optimize dashboard response by removing unnecessary fields that consume tokens
  * but aren't used by other handlers. Focuses on layout, cards, and parameters.
  */
-export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
+export function optimizeDashboardResponse(
+  dashboard: any,
+  optimizationLevel: OptimizationLevel = OptimizationLevel.STANDARD
+): OptimizedDashboard {
   const optimized: OptimizedDashboard = {
     id: dashboard.id,
     name: dashboard.name,
     retrieved_at: new Date().toISOString(),
   };
 
-  // Add optional fields only if they exist and have meaningful values
-  if (dashboard.description) {
+  // Add optional fields based on optimization level
+  if (
+    dashboard.description &&
+    (optimizationLevel === OptimizationLevel.STANDARD ||
+      optimizationLevel === OptimizationLevel.AGGRESSIVE)
+  ) {
     optimized.description = dashboard.description;
   }
 
@@ -132,12 +192,15 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
     optimized.can_write = dashboard.can_write;
   }
 
-  if (dashboard.created_at) {
-    optimized.created_at = dashboard.created_at;
-  }
+  // Timestamps - include only for standard level to save tokens in bulk operations
+  if (optimizationLevel === OptimizationLevel.STANDARD) {
+    if (dashboard.created_at) {
+      optimized.created_at = dashboard.created_at;
+    }
 
-  if (dashboard.updated_at) {
-    optimized.updated_at = dashboard.updated_at;
+    if (dashboard.updated_at) {
+      optimized.updated_at = dashboard.updated_at;
+    }
   }
 
   // Essential dashboard cards with optimized card data
@@ -215,13 +278,26 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
           Array.isArray(dashcard.card.parameters) &&
           dashcard.card.parameters.length > 0
         ) {
-          optimizedDashcard.card.parameters = dashcard.card.parameters.map((param: any) => ({
-            id: param.id,
-            name: param.name,
-            type: param.type,
-            slug: param.slug,
-            target: param.target,
-          }));
+          optimizedDashcard.card.parameters = dashcard.card.parameters.map((param: any) => {
+            const optimizedParam: any = {
+              id: param.id,
+              name: param.name,
+              type: param.type,
+              slug: param.slug,
+              target: param.target,
+            };
+
+            // Include values source information for parameters with static lists
+            if (param.values_source_type) {
+              optimizedParam.values_source_type = param.values_source_type;
+            }
+
+            if (param.values_source_config) {
+              optimizedParam.values_source_config = param.values_source_config;
+            }
+
+            return optimizedParam;
+          });
         }
       }
 
@@ -235,13 +311,26 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
     Array.isArray(dashboard.parameters) &&
     dashboard.parameters.length > 0
   ) {
-    optimized.parameters = dashboard.parameters.map((param: any) => ({
-      id: param.id,
-      name: param.name,
-      type: param.type,
-      slug: param.slug,
-      sectionId: param.sectionId,
-    }));
+    optimized.parameters = dashboard.parameters.map((param: any) => {
+      const optimizedParam: any = {
+        id: param.id,
+        name: param.name,
+        type: param.type,
+        slug: param.slug,
+        sectionId: param.sectionId,
+      };
+
+      // Include values source information for parameters with static lists
+      if (param.values_source_type) {
+        optimizedParam.values_source_type = param.values_source_type;
+      }
+
+      if (param.values_source_config) {
+        optimizedParam.values_source_config = param.values_source_config;
+      }
+
+      return optimizedParam;
+    });
   }
 
   // Dashboard tabs (if any)
@@ -258,8 +347,11 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
     optimized.auto_apply_filters = dashboard.auto_apply_filters;
   }
 
-  // Minimal creator info
-  if (dashboard.creator || dashboard['last-edit-info']) {
+  // Creator info - optimize based on level
+  if (
+    (dashboard.creator || dashboard['last-edit-info']) &&
+    optimizationLevel !== OptimizationLevel.ULTRA_MINIMAL
+  ) {
     const creator = dashboard.creator || dashboard['last-edit-info'];
     optimized.creator = {
       id: creator.id,
@@ -269,13 +361,21 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
     };
   }
 
-  // Minimal collection info
-  if (dashboard.collection) {
-    optimized.collection = {
-      id: dashboard.collection.id,
-      name: dashboard.collection.name,
-      location: dashboard.collection.location,
-    };
+  // Collection info - optimize based on level
+  if (dashboard.collection && optimizationLevel !== OptimizationLevel.ULTRA_MINIMAL) {
+    if (optimizationLevel === OptimizationLevel.STANDARD) {
+      optimized.collection = {
+        id: dashboard.collection.id,
+        name: dashboard.collection.name,
+        location: dashboard.collection.location,
+      };
+    } else {
+      // Aggressive level - just ID and name
+      optimized.collection = {
+        id: dashboard.collection.id,
+        name: dashboard.collection.name,
+      };
+    }
   }
 
   return optimized;
@@ -285,7 +385,10 @@ export function optimizeDashboardResponse(dashboard: any): OptimizedDashboard {
  * Optimize table response by removing unnecessary fields that consume tokens
  * but aren't used by other handlers. Focuses on essential schema information.
  */
-export function optimizeTableResponse(table: any): OptimizedTable {
+export function optimizeTableResponse(
+  table: any,
+  optimizationLevel: OptimizationLevel = OptimizationLevel.STANDARD
+): OptimizedTable {
   const optimized: OptimizedTable = {
     id: table.id,
     name: table.name,
@@ -293,13 +396,17 @@ export function optimizeTableResponse(table: any): OptimizedTable {
     display_name: table.display_name,
     entity_type: table.entity_type,
     active: table.active,
-    created_at: table.created_at,
-    updated_at: table.updated_at,
     field_order: table.field_order,
     is_upload: table.is_upload,
     initial_sync_status: table.initial_sync_status,
     retrieved_at: new Date().toISOString(),
   };
+
+  // Include timestamps only for standard level to save tokens in bulk operations
+  if (optimizationLevel === OptimizationLevel.STANDARD) {
+    optimized.created_at = table.created_at;
+    optimized.updated_at = table.updated_at;
+  }
 
   // Add optional fields only if they exist and have meaningful values
   if (table.description) {
@@ -356,30 +463,68 @@ export function optimizeTableResponse(table: any): OptimizedTable {
     }
   }
 
-  // Essential field information (without heavy fingerprint data)
+  // Essential field information (all fields preserved, metadata optimized by level)
   if (table.fields && Array.isArray(table.fields) && table.fields.length > 0) {
-    optimized.fields = table.fields.map((field: any) => ({
-      id: field.id,
-      name: field.name,
-      display_name: field.display_name,
-      description: field.description || undefined,
-      database_type: field.database_type,
-      base_type: field.base_type,
-      effective_type: field.effective_type,
-      semantic_type: field.semantic_type || undefined,
-      table_id: field.table_id,
-      position: field.position,
-      database_position: field.database_position,
-      active: field.active,
-      database_indexed: field.database_indexed,
-      database_required: field.database_required,
-      has_field_values: field.has_field_values,
-      visibility_type: field.visibility_type,
-      preview_display: field.preview_display,
-      fk_target_field_id: field.fk_target_field_id || undefined,
-      created_at: field.created_at,
-      updated_at: field.updated_at,
-    }));
+    optimized.fields = table.fields.map((field: any) => {
+      if (optimizationLevel === OptimizationLevel.ULTRA_MINIMAL) {
+        // Ultra minimal: Essential field identifiers + critical semantic info for discovery and relationships
+        return {
+          id: field.id,
+          name: field.name,
+          display_name: field.display_name,
+          database_type: field.database_type,
+          base_type: field.base_type,
+          effective_type: field.effective_type,
+          semantic_type: field.semantic_type || undefined, // ✓ Preserve for understanding field purpose
+          table_id: field.table_id,
+          position: field.position,
+          active: field.active,
+          fk_target_field_id: field.fk_target_field_id || undefined, // ✓ Preserve relationships
+        };
+      } else if (optimizationLevel === OptimizationLevel.AGGRESSIVE) {
+        // Aggressive: Essential info + relationships without timestamps and advanced metadata
+        return {
+          id: field.id,
+          name: field.name,
+          display_name: field.display_name,
+          description: field.description || undefined,
+          database_type: field.database_type,
+          base_type: field.base_type,
+          effective_type: field.effective_type,
+          semantic_type: field.semantic_type || undefined, // ✓ Always preserve semantic info
+          table_id: field.table_id,
+          position: field.position,
+          active: field.active,
+          database_indexed: field.database_indexed,
+          database_required: field.database_required,
+          fk_target_field_id: field.fk_target_field_id || undefined, // ✓ Always preserve relationships
+        };
+      } else {
+        // Standard: Full field information
+        return {
+          id: field.id,
+          name: field.name,
+          display_name: field.display_name,
+          description: field.description || undefined,
+          database_type: field.database_type,
+          base_type: field.base_type,
+          effective_type: field.effective_type,
+          semantic_type: field.semantic_type || undefined,
+          table_id: field.table_id,
+          position: field.position,
+          database_position: field.database_position,
+          active: field.active,
+          database_indexed: field.database_indexed,
+          database_required: field.database_required,
+          has_field_values: field.has_field_values,
+          visibility_type: field.visibility_type,
+          preview_display: field.preview_display,
+          fk_target_field_id: field.fk_target_field_id || undefined,
+          created_at: field.created_at,
+          updated_at: field.updated_at,
+        };
+      }
+    });
   }
 
   return optimized;
@@ -388,8 +533,14 @@ export function optimizeTableResponse(table: any): OptimizedTable {
 /**
  * Optimize database response by removing unnecessary fields that consume tokens
  * but aren't used by other handlers. Focuses on essential connection and table info.
+ * Supports pagination for large databases that exceed token limits.
  */
-export function optimizeDatabaseResponse(database: any): OptimizedDatabase {
+export function optimizeDatabaseResponse(
+  database: any,
+  optimizationLevel: OptimizationLevel = OptimizationLevel.STANDARD,
+  tableOffset: number = 0,
+  tableLimit?: number
+): OptimizedDatabase {
   const optimized: OptimizedDatabase = {
     id: database.id,
     name: database.name,
@@ -442,25 +593,73 @@ export function optimizeDatabaseResponse(database: any): OptimizedDatabase {
     optimized.updated_at = database.updated_at;
   }
 
-  // Essential table information (simplified)
+  // Essential table information with pagination support
   if (database.tables && Array.isArray(database.tables) && database.tables.length > 0) {
-    optimized.tables = database.tables.map((table: any) => ({
-      id: table.id,
-      name: table.name,
-      display_name: table.display_name,
-      description: table.description || undefined,
-      schema: table.schema || undefined,
-      view_count: table.view_count || undefined,
-      entity_type: table.entity_type || undefined,
-      active: table.active,
-      db_id: table.db_id,
-      field_order: table.field_order,
-      is_upload: table.is_upload,
-      initial_sync_status: table.initial_sync_status,
-      created_at: table.created_at,
-      updated_at: table.updated_at,
-      estimated_row_count: table.estimated_row_count || undefined,
-    }));
+    // Apply pagination if specified
+    let paginatedTables = database.tables;
+    const totalTables = database.tables.length;
+
+    if (tableLimit !== undefined) {
+      const startIndex = tableOffset;
+      const endIndex = tableOffset + tableLimit;
+      paginatedTables = database.tables.slice(startIndex, endIndex);
+
+      // Add pagination metadata
+      (optimized as any).pagination = {
+        total_tables: totalTables,
+        table_offset: tableOffset,
+        table_limit: tableLimit,
+        current_page_size: paginatedTables.length,
+        has_more: endIndex < totalTables,
+        next_offset: endIndex < totalTables ? endIndex : undefined,
+      };
+    }
+
+    optimized.tables = paginatedTables.map((table: any) => {
+      if (optimizationLevel === OptimizationLevel.ULTRA_MINIMAL) {
+        // Ultra minimal: Only essential identifiers for discovery
+        return {
+          id: table.id,
+          name: table.name,
+          display_name: table.display_name,
+          schema: table.schema || undefined,
+          active: table.active,
+          db_id: table.db_id,
+        };
+      } else if (optimizationLevel === OptimizationLevel.AGGRESSIVE) {
+        // Aggressive: Essential info without timestamps and heavy metadata
+        return {
+          id: table.id,
+          name: table.name,
+          display_name: table.display_name,
+          description: table.description || undefined,
+          schema: table.schema || undefined,
+          entity_type: table.entity_type || undefined,
+          active: table.active,
+          db_id: table.db_id,
+          is_upload: table.is_upload,
+        };
+      } else {
+        // Standard: Full table information
+        return {
+          id: table.id,
+          name: table.name,
+          display_name: table.display_name,
+          description: table.description || undefined,
+          schema: table.schema || undefined,
+          view_count: table.view_count || undefined,
+          entity_type: table.entity_type || undefined,
+          active: table.active,
+          db_id: table.db_id,
+          field_order: table.field_order,
+          is_upload: table.is_upload,
+          initial_sync_status: table.initial_sync_status,
+          created_at: table.created_at,
+          updated_at: table.updated_at,
+          estimated_row_count: table.estimated_row_count || undefined,
+        };
+      }
+    });
   }
 
   return optimized;
@@ -470,7 +669,10 @@ export function optimizeDatabaseResponse(database: any): OptimizedDatabase {
  * Optimize collection response by removing unnecessary fields that consume tokens
  * but aren't used by other handlers. Collections are relatively small already.
  */
-export function optimizeCollectionResponse(collection: any): OptimizedCollection {
+export function optimizeCollectionResponse(
+  collection: any,
+  optimizationLevel: OptimizationLevel = OptimizationLevel.STANDARD
+): OptimizedCollection {
   const optimized: OptimizedCollection = {
     id: collection.id,
     name: collection.name,
@@ -487,12 +689,16 @@ export function optimizeCollectionResponse(collection: any): OptimizedCollection
     retrieved_at: new Date().toISOString(),
   };
 
-  // Add optional fields only if they exist and have meaningful values
-  if (collection.description) {
+  // Add optional fields based on optimization level
+  if (
+    collection.description &&
+    (optimizationLevel === OptimizationLevel.STANDARD ||
+      optimizationLevel === OptimizationLevel.AGGRESSIVE)
+  ) {
     optimized.description = collection.description;
   }
 
-  if (collection.authority_level) {
+  if (collection.authority_level && optimizationLevel !== OptimizationLevel.ULTRA_MINIMAL) {
     optimized.authority_level = collection.authority_level;
   }
 
@@ -512,11 +718,12 @@ export function optimizeCollectionResponse(collection: any): OptimizedCollection
     optimized.namespace = collection.namespace;
   }
 
-  // Essential hierarchy information
+  // Essential hierarchy information (only for standard level)
   if (
     collection.effective_ancestors &&
     Array.isArray(collection.effective_ancestors) &&
-    collection.effective_ancestors.length > 0
+    collection.effective_ancestors.length > 0 &&
+    optimizationLevel === OptimizationLevel.STANDARD
   ) {
     optimized.effective_ancestors = collection.effective_ancestors.map((ancestor: any) => ({
       'metabase.collections.models.collection.root/is-root?':
@@ -536,7 +743,10 @@ export function optimizeCollectionResponse(collection: any): OptimizedCollection
  * Optimize field response by removing unnecessary fields that consume tokens
  * but aren't used by other handlers. Focuses on schema information and relationships.
  */
-export function optimizeFieldResponse(field: any): OptimizedField {
+export function optimizeFieldResponse(
+  field: any,
+  optimizationLevel: OptimizationLevel = OptimizationLevel.STANDARD
+): OptimizedField {
   const optimized: OptimizedField = {
     id: field.id,
     name: field.name,
@@ -564,21 +774,31 @@ export function optimizeFieldResponse(field: any): OptimizedField {
     retrieved_at: new Date().toISOString(),
   };
 
-  // Add optional fields only if they exist and have meaningful values
-  if (field.description) {
+  // Add optional fields based on optimization level
+  if (
+    field.description &&
+    (optimizationLevel === OptimizationLevel.STANDARD ||
+      optimizationLevel === OptimizationLevel.AGGRESSIVE)
+  ) {
     optimized.description = field.description;
   }
 
+  // Always preserve semantic type - critical for understanding field purpose
   if (field.semantic_type) {
     optimized.semantic_type = field.semantic_type;
   }
 
+  // Always preserve foreign key relationships - critical for joins and relationships
   if (field.fk_target_field_id !== null && field.fk_target_field_id !== undefined) {
     optimized.fk_target_field_id = field.fk_target_field_id;
   }
 
-  // Essential fingerprint data (simplified)
-  if (field.fingerprint && field.fingerprint.global) {
+  // Essential fingerprint data (only for standard level)
+  if (
+    field.fingerprint &&
+    field.fingerprint.global &&
+    optimizationLevel === OptimizationLevel.STANDARD
+  ) {
     optimized.fingerprint = {
       global: {
         'distinct-count': field.fingerprint.global['distinct-count'],
@@ -600,7 +820,7 @@ export function optimizeFieldResponse(field: any): OptimizedField {
     optimized.table.view_count = field.table.view_count;
   }
 
-  // Essential target field information (for foreign keys)
+  // Essential target field information (for foreign keys) - always preserve relationships
   if (field.target) {
     optimized.target = {
       id: field.target.id,
@@ -612,6 +832,7 @@ export function optimizeFieldResponse(field: any): OptimizedField {
       effective_type: field.target.effective_type,
     };
 
+    // Always preserve semantic type of target field for relationship understanding
     if (field.target.semantic_type) {
       optimized.target.semantic_type = field.target.semantic_type;
     }

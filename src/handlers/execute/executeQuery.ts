@@ -1,17 +1,21 @@
 import { MetabaseApiClient } from '../../api.js';
-import { handleApiError } from '../../utils.js';
+import { handleApiError, validatePositiveInteger } from '../../utils/index.js';
 import { SqlExecutionParams, ExecutionResponse } from './types.js';
 
 export async function executeSqlQuery(
   params: SqlExecutionParams,
-  _requestId: string,
+  requestId: string,
   apiClient: MetabaseApiClient,
   logDebug: (message: string, data?: unknown) => void,
   logInfo: (message: string, data?: unknown) => void,
-  _logWarn: (message: string, data?: unknown, error?: Error) => void,
+  logWarn: (message: string, data?: unknown, error?: Error) => void,
   logError: (message: string, error: unknown) => void
 ): Promise<ExecutionResponse> {
   const { databaseId, query, nativeParameters, rowLimit } = params;
+
+  // Validate positive integer parameters
+  validatePositiveInteger(databaseId, 'database_id', requestId, logWarn);
+  validatePositiveInteger(rowLimit, 'row_limit', requestId, logWarn);
 
   logDebug(`Executing SQL query against database ID: ${databaseId} with row limit: ${rowLimit}`);
 
@@ -84,9 +88,6 @@ export async function executeSqlQuery(
       rows: response?.data?.rows || [],
       cols: response?.data?.cols || [],
       row_count: rowCount,
-      native_form: {
-        query: response?.data?.native_form?.query || limitedQuery,
-      },
     };
 
     return {
@@ -96,7 +97,7 @@ export async function executeSqlQuery(
           text: JSON.stringify(
             {
               success: true,
-              query: query,
+              query: limitedQuery, // Use the actual executed query
               database_id: databaseId,
               row_count: rowCount,
               applied_limit: finalLimit,
