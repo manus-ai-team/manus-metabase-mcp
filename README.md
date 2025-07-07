@@ -2,13 +2,26 @@
 
 [![smithery badge](https://smithery.ai/badge/@jerichosequitin/metabase-mcp)](https://smithery.ai/server/@jerichosequitin/metabase-mcp)
 
+**Version**: 1.0.0
 **Author**: Jericho Sequitin (@jerichosequitin)
 
-A lightweight, enterprise-grade Model Context Protocol server designed for high-performance integration between AI assistants and Metabase analytics platforms. Built with intelligent caching, response optimization, and unified command architecture for production environments.
+A lightweight, enterprise-grade Model Context Protocol server designed for high-performance integration between AI assistants and Metabase analytics platforms. Built with intelligent caching, response optimization, and unified command architecture.
+
+**Available as a Desktop Extension (DXT) for Claude Desktop.**
 
 ## Overview
 
-This TypeScript-based MCP server provides seamless integration with the Metabase API, enabling AI assistants to directly interact with your analytics data with enterprise-level performance and reliability. Designed for Claude and other MCP-compatible AI assistants, this server acts as an optimized bridge between your analytics platform and conversational AI.
+This TypeScript-based MCP server provides seamless integration with the Metabase API, enabling AI assistants to directly interact with your analytics data with enterprise-level performance and reliability. Designed for Claude and other MCP-compatible AI assistants, this server acts as an optimized bridge between your analytics platform and conversational AI. The server communicates via STDIO and is automatically managed by host applications.
+
+### Installation Options
+
+#### Option 1: Desktop Extension (Recommended for Claude Desktop Users)
+1. Download the latest `metabase-mcp.dxt` file from [Releases](https://github.com/jerichosequitin/metabase-mcp/releases)
+2. Open the `.dxt` file with Claude Desktop to install
+3. Configure your Metabase credentials in Claude Desktop's extension settings
+
+#### Option 2: Manual Installation
+Follow the standard MCP server installation process detailed in the Configuration section below.
 
 ### Key Features
 
@@ -95,9 +108,29 @@ The server exposes the following optimized tools for AI assistants:
 - **Rate Limiting**: Prevents API overload with intelligent batching
 - **Performance Metrics**: Real-time processing statistics and time savings
 
+## Desktop Extension (DXT) for Claude Desktop
+
+The Metabase MCP Server is now available as a Desktop Extension (DXT) for Claude Desktop users, providing single-click installation and automatic configuration.
+
+### DXT Installation
+
+1. **Download**: Get the latest `metabase-mcp.dxt` file from [GitHub Releases](https://github.com/jerichosequitin/metabase-mcp/releases)
+2. **Install**: Open the `.dxt` file with Claude Desktop - it will automatically show an installation dialog
+3. **Configure**: Set up your Metabase credentials in Claude Desktop's extension settings:
+   - **Metabase URL** (required): Your Metabase instance URL
+   - **API Key** (recommended) or **Email/Password** for authentication
+   - **Optional**: Log level, cache TTL, and request timeout settings
+
+### Benefits of DXT Installation
+
+- **Single-click installation**: No manual configuration files or command-line setup
+- **Automatic updates**: Claude Desktop manages extension updates
+- **User-friendly settings**: Configure through Claude Desktop's UI
+- **Seamless integration**: Tools automatically available in your conversations
+
 ## Configuration
 
-The server supports two authentication methods:
+The server supports two authentication methods for both DXT and manual installations:
 
 ### Option 1: Username and Password Authentication
 
@@ -144,7 +177,7 @@ npm install
 # Build the project
 npm run build
 
-# Start the server
+# Test the server build
 npm start
 
 # For development with auto-rebuild and concurrent watching
@@ -162,7 +195,7 @@ npm run dev            # Build and run once
 # Production
 npm run build          # Build TypeScript to JavaScript
 npm run build:clean    # Clean build and rebuild
-npm start             # Start the built server
+npm start             # Test the built server (for development/debugging only)
 
 # Quality Assurance
 npm run lint          # Run ESLint
@@ -173,7 +206,7 @@ npm run type-check    # TypeScript type checking
 npm run validate      # Run all QA checks
 
 # Debugging
-npm run inspector     # Start with MCP Inspector
+npm run inspector     # Test with MCP Inspector (for development/debugging)
 npm run clean         # Clean build artifacts
 ```
 
@@ -214,7 +247,7 @@ For local development and testing, follow these steps:
    # Verify the build was successful
    ls -la build/src/index.js
 
-   # Optional: Test the server manually (for development/debugging only)
+   # Optional: Test the server build (for development/debugging only)
    # npm start
    ```
 
@@ -264,7 +297,7 @@ To integrate with Claude Desktop, you'll need to configure the MCP server in Cla
 - **Use absolute paths** for local development (e.g., `/Users/username/Documents/metabase-mcp/build/src/index.js`)
 - **Replace `your-username`** with your actual username
 - **Replace `path/to/metabase-mcp`** with the actual path to your cloned repository
-- **No need to run the server manually** - Claude Desktop will automatically start and manage the MCP server process
+- **No need to run the server manually** - Claude Desktop will automatically invoke and manage the MCP server via STDIO
 - **Never commit real credentials** to version control
 - **Restart Claude Desktop** after making configuration changes
 
@@ -284,13 +317,13 @@ list({ model: "cards" })
 // Get first 100 cards with pagination (for large datasets)
 list({ model: "cards", limit: 100 })
 
-// Get next page of cards  
+// Get next page of cards
 list({ model: "cards", offset: 100, limit: 100 })
 
 // Get overview of all dashboards
 list({ model: "dashboards" })
 
-// Get overview of all tables  
+// Get overview of all tables
 list({ model: "tables" })
 
 // Get overview of all databases
@@ -409,7 +442,7 @@ execute({
   card_parameters: [
     {
       "id": "1646c8b5-b9fb-32db-c198-7685b3f793d8",
-      "slug": "start_date", 
+      "slug": "start_date",
       "target": ["dimension", ["template-tag", "start_date"]],
       "type": "date/all-options",
       "value": "2024-01-01~2024-12-31"
@@ -422,7 +455,7 @@ execute({
       "value": "active"
     },
     {
-      "id": "b86c100e-87cb-09d6-7c33-e58cd2cdbcb2", 
+      "id": "b86c100e-87cb-09d6-7c33-e58cd2cdbcb2",
       "slug": "department_id",
       "target": ["dimension", ["template-tag", "department_id"]],
       "type": "id",
@@ -450,7 +483,7 @@ export({
     {
       "id": "f1e2d3c4-b5a6-9870-cdef-123456789abc",
       "slug": "year",
-      "target": ["dimension", ["template-tag", "year"]], 
+      "target": ["dimension", ["template-tag", "year"]],
       "type": "number",
       "value": "2024"
     },
@@ -458,7 +491,7 @@ export({
       "id": "a9b8c7d6-e5f4-3210-9876-fedcba987654",
       "slug": "region",
       "target": ["dimension", ["template-tag", "region"]],
-      "type": "text", 
+      "type": "text",
       "value": "North America"
     },
     {
@@ -513,13 +546,13 @@ The server provides detailed performance metrics for all operations:
 
 ## Debugging
 
-Since MCP servers communicate over stdio, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) for debugging:
+MCP servers communicate via STDIO (not HTTP) and are managed by host applications like Claude Desktop. For debugging and development testing, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
 npm run inspector
 ```
 
-The Inspector provides a browser-based interface for monitoring requests, responses, and performance metrics.
+The Inspector provides a browser-based interface for monitoring MCP protocol requests, responses, and performance metrics during development.
 
 ## Docker Support
 
@@ -529,18 +562,21 @@ The Inspector provides a browser-based interface for monitoring requests, respon
 # Build the Docker image
 docker build -t metabase-mcp .
 
-# Run with API key authentication
+# Test with API key authentication
 docker run -e METABASE_URL=https://metabase.example.com \
            -e METABASE_API_KEY=your_api_key \
            -e LOG_LEVEL=info \
            metabase-mcp
 
-# Run with username/password authentication
+# Test with username/password authentication
 docker run -e METABASE_URL=https://metabase.example.com \
            -e METABASE_USER_EMAIL=user@example.com \
            -e METABASE_PASSWORD=password \
            -e LOG_LEVEL=info \
            metabase-mcp
+
+# Note: Docker is primarily for development/testing. In production,
+# host applications like Claude Desktop manage the MCP server lifecycle via STDIO.
 ```
 
 ## Testing
@@ -551,8 +587,8 @@ The project includes a robust testing framework with comprehensive unit tests co
 
 #### Test Coverage by Handler
 - **clearCache**: Parameter validation, cache operations, response formatting
-- **executeQuery**: SQL execution, parameter handling, row limits, query processing
-- **exportQuery**: Format support (CSV/JSON/XLSX), file operations, validation
+- **execute**: SQL execution, parameter handling, row limits, query processing
+- **export**: Format support (CSV/JSON/XLSX), file operations, validation
 - **list**: All model types, caching, error handling, empty results
 - **retrieve**: Multi-entity support, batch operations, cache behavior
 - **search**: Advanced search parameters, model restrictions, query combinations
@@ -614,6 +650,50 @@ Automated testing runs on:
 
 ### Code Quality
 - **Modular Architecture**: Organized handlers, types, and utilities
+
+## Building Desktop Extension (DXT)
+
+For developers who want to build and distribute the Desktop Extension:
+
+### Prerequisites
+- Node.js 18+ installed
+- DXT CLI tool: `npm install -g @anthropic-ai/dxt`
+
+### Building the DXT Package
+
+```bash
+# 1. Build the project
+npm run build
+
+# 2. Create the DXT package
+dxt pack .
+
+# This creates metabase-mcp.dxt ready for distribution
+```
+
+### DXT Development Scripts
+
+```bash
+# Run complete DXT build and validation
+npm run dxt:build
+
+# Validate DXT manifest structure
+npm run dxt:test
+```
+
+### Distribution
+
+1. The `.dxt` file should be distributed via GitHub Releases (not committed to the repository)
+2. Users download and open the file with Claude Desktop for automatic installation
+3. No specific storage location required - Claude Desktop handles the installation
+
+### DXT Package Contents
+
+- **manifest.json**: DXT configuration and metadata
+- **build/**: Compiled TypeScript server code
+- **node_modules/**: All required dependencies
+- **icon.png**: Metabase logo for the extension
+- **package.json**: NPM configuration
 - **Error Handling**: Comprehensive error handling with detailed logging
 - **Documentation**: Extensive inline documentation and type definitions
 - **Testing**: Automated CI testing across Node.js versions

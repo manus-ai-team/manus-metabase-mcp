@@ -1,6 +1,6 @@
 {
   "name": "@jericho/metabase-mcp",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "A custom Model Context Protocol server for Metabase integration - Jericho's version",
   "private": true,
   "type": "module",
@@ -34,7 +34,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:all": "./scripts/test-all.sh",
-    "clean": "rm -rf build dist node_modules/.cache"
+    "clean": "rm -rf build dist node_modules/.cache",
+    "dxt:test": "dxt pack . --dry-run",
+    "dxt:build": "npm run build && npm run dxt:test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.1",
