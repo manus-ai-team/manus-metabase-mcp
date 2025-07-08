@@ -94,6 +94,13 @@ function main() {
       log(`  - ${config.outputFile} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
     }
   }
+  
+  // Restore manifest.json to API key version as default
+  log('\nRestoring manifest.json to API key version as default...');
+  const apiKeyManifestPath = path.join(process.cwd(), 'manifest-api-key.json');
+  const targetManifestPath = path.join(process.cwd(), 'manifest.json');
+  fs.copyFileSync(apiKeyManifestPath, targetManifestPath);
+  log('manifest.json restored to API key version');
 }
 
 if (require.main === module) {
