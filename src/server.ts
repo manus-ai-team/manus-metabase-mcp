@@ -9,7 +9,7 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { LogLevel, authMethod, AuthMethod } from './config.js';
+import { LogLevel } from './config.js';
 import { generateRequestId } from './utils/index.js';
 import { ErrorCode, McpError, ApiError } from './types/core.js';
 import { MetabaseApiClient } from './api.js';
@@ -33,13 +33,9 @@ export class MetabaseServer {
   private apiClient: MetabaseApiClient;
 
   constructor() {
-    // Generate server name based on authentication method for proper DXT handling
-    const serverName =
-      authMethod === AuthMethod.API_KEY ? 'metabase-mcp-api-key' : 'metabase-mcp-session';
-
     this.server = new Server(
       {
-        name: serverName,
+        name: 'metabase-mcp',
         version: '1.0.0',
       },
       {

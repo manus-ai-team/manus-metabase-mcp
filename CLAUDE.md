@@ -45,6 +45,9 @@ npm run dev:watch
 
 # Single development run
 npm run dev
+
+# Build versioned DXT package
+npm run dxt:build
 ```
 
 ### Code Quality
