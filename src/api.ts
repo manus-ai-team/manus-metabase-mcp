@@ -999,4 +999,27 @@ export class MetabaseApiClient {
       throw error;
     }
   }
+
+  /**
+   * Get current user information to determine user ID for personal collection filtering
+   */
+  async getCurrentUser(): Promise<CachedResponse<any>> {
+    const startTime = Date.now();
+
+    try {
+      this.logDebug('Fetching current user information from Metabase API');
+      const user = await this.request<any>('/api/user/current');
+      const fetchTime = Date.now() - startTime;
+
+      this.logInfo(`Successfully fetched current user information in ${fetchTime}ms`);
+      return {
+        data: user,
+        source: 'api',
+        fetchTime,
+      };
+    } catch (error) {
+      this.logError('Failed to fetch current user information from Metabase API', error);
+      throw error;
+    }
+  }
 }

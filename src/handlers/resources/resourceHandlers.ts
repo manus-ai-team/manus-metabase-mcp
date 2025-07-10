@@ -36,6 +36,16 @@ export async function handleListResources(
   try {
     const resources: Resource[] = [];
     let totalResourceCount = 0;
+    let currentUserId: number | null = null;
+
+    // Get current user information for personal collection filtering
+    try {
+      const userResponse = await apiClient.getCurrentUser();
+      currentUserId = userResponse.data?.id || null;
+      logInfo(`Current user ID: ${currentUserId}`, { requestId });
+    } catch (error) {
+      logError('Failed to fetch current user info, will exclude all personal collections', error);
+    }
 
     // Fetch core data: cards, dashboards, collections, and databases
     const [cardsResponse, dashboardsResponse, collectionsResponse, databasesResponse] =
@@ -102,22 +112,33 @@ export async function handleListResources(
       );
     }
 
-    // Add ROOT collections only (location: "/")
+    // Add ROOT collections only (location: "/") and user's own personal collection
     if (collectionsResponse.data.length > 0) {
       const rootCollectionResources = collectionsResponse.data
-        .filter((collection: any) => !collection.personal_owner_id) // Exclude personal collections
-        .filter((collection: any) => collection.location === '/') // Only root collections
+        .filter((collection: any) => {
+          // Include non-personal collections (regular collections)
+          if (!collection.personal_owner_id) {
+            return collection.location === '/'; // Only root collections for non-personal
+          }
+          // Include user's own personal collection if we have their user ID
+          if (currentUserId && collection.personal_owner_id === currentUserId) {
+            return true;
+          }
+          // Exclude other users' personal collections
+          return false;
+        })
         .map((collection: any) => ({
           uri: `metabase://collection/${collection.id}`,
           mimeType: 'application/json',
           name: `[Collection] ${collection.name}`,
           description: `Collection: ${collection.name}${collection.description ? ` - ${collection.description}` : ''}`,
+          isPersonal: !!collection.personal_owner_id,
         }));
 
       resources.push(...rootCollectionResources);
       totalResourceCount += rootCollectionResources.length;
       logInfo(
-        `Added ${rootCollectionResources.length} root collections (${collectionsResponse.data.length} total, filtered to location: "/")`
+        `Added ${rootCollectionResources.length} collections (${collectionsResponse.data.length} total, filtered to root collections and user's personal collection)`
       );
     }
 
@@ -164,15 +185,36 @@ export async function handleListResources(
         return aType - bType;
       }
 
+      // Within collections, prioritize personal collections first
+      if (aType === 2 && bType === 2) {
+        // Both are collections
+        const aIsPersonal = (a as any).isPersonal || false;
+        const bIsPersonal = (b as any).isPersonal || false;
+
+        if (aIsPersonal && !bIsPersonal) {
+          return -1; // Personal collection comes first
+        }
+        if (!aIsPersonal && bIsPersonal) {
+          return 1; // Personal collection comes first
+        }
+      }
+
       // Within same type, sort alphabetically by name
       return a.name.localeCompare(b.name);
     });
 
+    // Clean up sorting helper properties before returning
+    const finalResources = sortedResources.map(resource => {
+      const resourceCopy = { ...resource };
+      delete (resourceCopy as any).isPersonal;
+      return resourceCopy;
+    });
+
     logInfo(
-      `Successfully retrieved ${sortedResources.length} view-based resources (from ${totalResourceCount} total items)`
+      `Successfully retrieved ${finalResources.length} view-based resources (from ${totalResourceCount} total items)`
     );
 
-    return { resources: sortedResources };
+    return { resources: finalResources };
   } catch (error) {
     logError('Failed to retrieve Metabase resources', error);
     throw new McpError(ErrorCode.InternalError, 'Failed to retrieve Metabase resources');

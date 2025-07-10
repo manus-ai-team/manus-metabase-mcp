@@ -13,6 +13,7 @@ describe('Resource Handlers', () => {
     
     mockApiClient = {
       getSessionToken: vi.fn().mockResolvedValue('test-token'),
+      getCurrentUser: vi.fn(),
       getCardsList: vi.fn(),
       getDashboardsList: vi.fn(),
       getCollectionsList: vi.fn(),
@@ -105,6 +106,7 @@ describe('Resource Handlers', () => {
         source: 'api'
       };
 
+      mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 5 }, source: 'api' });
       mockApiClient.getCardsList.mockResolvedValue(mockCards);
       mockApiClient.getDashboardsList.mockResolvedValue(mockDashboards);
       mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
@@ -118,6 +120,7 @@ describe('Resource Handlers', () => {
       );
 
       // Check that all API methods were called
+      expect(mockApiClient.getCurrentUser).toHaveBeenCalled();
       expect(mockApiClient.getCardsList).toHaveBeenCalled();
       expect(mockApiClient.getDashboardsList).toHaveBeenCalled();
       expect(mockApiClient.getCollectionsList).toHaveBeenCalled();
@@ -135,22 +138,24 @@ describe('Resource Handlers', () => {
       expect(dashboardResources[0].name).toBe('[Dashboard] Dashboard 1'); // Highest view count
       expect(dashboardResources[0].description).toContain('200 views');
 
-      // Should have 2 root collections (personal and nested collections filtered out)
+      // Should have 3 collections: 2 root collections + 1 personal collection (user ID = 5)
       const collectionResources = result.resources.filter(r => r.name.startsWith('[Collection]'));
-      expect(collectionResources).toHaveLength(2);
+      expect(collectionResources).toHaveLength(3);
       expect(collectionResources.some(r => r.name === '[Collection] Finance')).toBe(true);
       expect(collectionResources.some(r => r.name === '[Collection] Marketing')).toBe(true);
+      expect(collectionResources.some(r => r.name === '[Collection] Personal Collection')).toBe(true);
 
       // Should have 1 database (sample databases filtered out)
       const databaseResources = result.resources.filter(r => r.name.startsWith('[Database]'));
       expect(databaseResources).toHaveLength(1);
       expect(databaseResources[0].name).toBe('[Database] Production DB');
 
-      // Total should be 20 + 20 + 2 + 1 = 43
-      expect(result.resources).toHaveLength(43);
+      // Total should be 20 + 20 + 3 + 1 = 44
+      expect(result.resources).toHaveLength(44);
     });
 
     it('should handle empty responses gracefully', async () => {
+      mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 1 }, source: 'api' });
       mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
       mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
       mockApiClient.getCollectionsList.mockResolvedValue({ data: [], source: 'api' });
@@ -183,6 +188,7 @@ describe('Resource Handlers', () => {
         source: 'api'
       };
 
+      mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 1 }, source: 'api' });
       mockApiClient.getCardsList.mockResolvedValue(mockCards);
       mockApiClient.getDashboardsList.mockResolvedValue(mockDashboards);
       mockApiClient.getCollectionsList.mockResolvedValue({ data: [], source: 'api' });
@@ -203,6 +209,184 @@ describe('Resource Handlers', () => {
       const dashboardResources = result.resources.filter(r => r.name.startsWith('[Dashboard]'));
       expect(dashboardResources).toHaveLength(1);
       expect(dashboardResources[0].name).toBe('[Dashboard] Active Dashboard');
+    });
+
+    it('should include user\'s own personal collection but exclude others', async () => {
+      const mockCollections = {
+        data: [
+          {
+            id: 1,
+            name: 'Finance',
+            description: 'Financial reports',
+            personal_owner_id: null,
+            location: '/'
+          },
+          {
+            id: 2,
+            name: 'User Personal Collection',
+            personal_owner_id: 123,
+            location: '/'
+          },
+          {
+            id: 3,
+            name: 'Other User Personal Collection',
+            personal_owner_id: 456,
+            location: '/'
+          }
+        ],
+        source: 'api'
+      };
+
+      mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 123 }, source: 'api' });
+      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
+      mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
+
+      const result = await handleListResources(
+        { method: 'list' } as any,
+        mockApiClient,
+        mockLoggers.logInfo,
+        mockLoggers.logError
+      );
+
+      const collectionResources = result.resources.filter(r => r.name.startsWith('[Collection]'));
+      expect(collectionResources).toHaveLength(2); // Finance + User's personal collection
+      expect(collectionResources.some(r => r.name === '[Collection] Finance')).toBe(true);
+      expect(collectionResources.some(r => r.name === '[Collection] User Personal Collection')).toBe(true);
+      expect(collectionResources.some(r => r.name === '[Collection] Other User Personal Collection')).toBe(false);
+    });
+
+    it('should exclude all personal collections when getCurrentUser fails', async () => {
+      const mockCollections = {
+        data: [
+          {
+            id: 1,
+            name: 'Finance',
+            description: 'Financial reports',
+            personal_owner_id: null,
+            location: '/'
+          },
+          {
+            id: 2,
+            name: 'User Personal Collection',
+            personal_owner_id: 123,
+            location: '/'
+          }
+        ],
+        source: 'api'
+      };
+
+      mockApiClient.getCurrentUser.mockRejectedValue(new Error('Failed to get user'));
+      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
+      mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
+
+      const result = await handleListResources(
+        { method: 'list' } as any,
+        mockApiClient,
+        mockLoggers.logInfo,
+        mockLoggers.logError
+      );
+
+      const collectionResources = result.resources.filter(r => r.name.startsWith('[Collection]'));
+      expect(collectionResources).toHaveLength(1); // Only Finance collection
+      expect(collectionResources[0].name).toBe('[Collection] Finance');
+    });
+
+    it('should filter nested collections correctly', async () => {
+      const mockCollections = {
+        data: [
+          {
+            id: 1,
+            name: 'Root Collection',
+            personal_owner_id: null,
+            location: '/'
+          },
+          {
+            id: 2,
+            name: 'Nested Collection',
+            personal_owner_id: null,
+            location: '/1/'
+          },
+          {
+            id: 3,
+            name: 'User Personal Collection',
+            personal_owner_id: 123,
+            location: '/'
+          }
+        ],
+        source: 'api'
+      };
+
+      mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 123 }, source: 'api' });
+      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
+      mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
+
+      const result = await handleListResources(
+        { method: 'list' } as any,
+        mockApiClient,
+        mockLoggers.logInfo,
+        mockLoggers.logError
+      );
+
+      const collectionResources = result.resources.filter(r => r.name.startsWith('[Collection]'));
+      expect(collectionResources).toHaveLength(2); // Root Collection + User's personal collection
+      expect(collectionResources.some(r => r.name === '[Collection] Root Collection')).toBe(true);
+      expect(collectionResources.some(r => r.name === '[Collection] User Personal Collection')).toBe(true);
+      expect(collectionResources.some(r => r.name === '[Collection] Nested Collection')).toBe(false);
+    });
+
+    it('should sort personal collections to the top of the collections list', async () => {
+      const mockCollections = {
+        data: [
+          {
+            id: 1,
+            name: 'Analytics',
+            description: 'Analytics collection',
+            personal_owner_id: null,
+            location: '/'
+          },
+          {
+            id: 2,
+            name: 'My Personal Collection',
+            personal_owner_id: 123,
+            location: '/'
+          },
+          {
+            id: 3,
+            name: 'Finance',
+            description: 'Finance collection',
+            personal_owner_id: null,
+            location: '/'
+          }
+        ],
+        source: 'api'
+      };
+
+      mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 123 }, source: 'api' });
+      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
+      mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
+
+      const result = await handleListResources(
+        { method: 'list' } as any,
+        mockApiClient,
+        mockLoggers.logInfo,
+        mockLoggers.logError
+      );
+
+      const collectionResources = result.resources.filter(r => r.name.startsWith('[Collection]'));
+      expect(collectionResources).toHaveLength(3);
+      
+      // Personal collection should be first, then alphabetical order for regular collections
+      expect(collectionResources[0].name).toBe('[Collection] My Personal Collection');
+      expect(collectionResources[1].name).toBe('[Collection] Analytics');
+      expect(collectionResources[2].name).toBe('[Collection] Finance');
     });
   });
 
