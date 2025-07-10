@@ -158,6 +158,12 @@ The project uses Vitest with comprehensive test coverage:
 
 Test files are located in `tests/` directory with structure mirroring `src/handlers/`.
 
+### Testing Patterns
+- **API Client Testing**: Do NOT create dedicated tests for individual API client methods (e.g., `tests/api.test.ts`)
+- **Handler-Level Mocking**: All API interactions should be mocked at the handler level in handler tests
+- **Consistent Pattern**: Follow the established pattern where `tests/handlers/` contains tests that mock the entire API client
+- **No Redundant Tests**: Avoid creating separate API client tests when the methods are already tested through handler tests
+
 ## Performance Optimizations
 
 ### Caching System

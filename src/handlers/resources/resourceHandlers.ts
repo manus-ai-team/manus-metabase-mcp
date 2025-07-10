@@ -21,7 +21,7 @@ import {
 } from './types.js';
 
 /**
- * Handle listing all available resources across multiple Metabase resource types
+ * Handle listing all available resources using hierarchical approach for better scalability
  */
 export async function handleListResources(
   _request: ListResourcesRequest,
@@ -30,15 +30,15 @@ export async function handleListResources(
   logError: LogFunction
 ) {
   const requestId = generateRequestId();
-  logInfo('Processing request to list comprehensive Metabase resources', { requestId });
+  logInfo('Processing request to list hierarchical Metabase resources', { requestId });
   await apiClient.getSessionToken();
 
   try {
     const resources: Resource[] = [];
     let totalResourceCount = 0;
 
-    // Fetch multiple resource types concurrently for better performance
-    const [cardsResponse, dashboardsResponse, databasesResponse, tablesResponse] =
+    // Fetch core data: cards, dashboards, collections, and databases
+    const [cardsResponse, dashboardsResponse, collectionsResponse, databasesResponse] =
       await Promise.all([
         apiClient.getCardsList().catch(error => {
           logError('Failed to fetch cards', error);
@@ -48,53 +48,80 @@ export async function handleListResources(
           logError('Failed to fetch dashboards', error);
           return { data: [], source: 'error' };
         }),
+        apiClient.getCollectionsList().catch(error => {
+          logError('Failed to fetch collections', error);
+          return { data: [], source: 'error' };
+        }),
         apiClient.getDatabasesList().catch(error => {
           logError('Failed to fetch databases', error);
           return { data: [], source: 'error' };
         }),
-        apiClient.getTablesList().catch(error => {
-          logError('Failed to fetch tables', error);
-          return { data: [], source: 'error' };
-        }),
       ]);
 
-    // Add cards/questions as resources
+    // Add top 20 cards based on views
     if (cardsResponse.data.length > 0) {
-      const cardResources = cardsResponse.data
+      const topCards = cardsResponse.data
         .filter((card: any) => !card.archived) // Only active cards
+        .sort((a: any, b: any) => (b.view_count || 0) - (a.view_count || 0)) // Sort by views descending
+        .slice(0, 20) // Top 20
         .map((card: any) => ({
           uri: `metabase://card/${card.id}`,
           mimeType: 'application/json',
           name: `[Card] ${card.name}`,
-          description: `Card: ${card.name}${card.description ? ` - ${card.description}` : ''}`,
+          description: `Card: ${card.name}${card.description ? ` - ${card.description}` : ''}${
+            card.view_count ? ` (${card.view_count} views)` : ''
+          }`,
         }));
 
-      resources.push(...cardResources);
-      totalResourceCount += cardsResponse.data.length;
+      resources.push(...topCards);
+      totalResourceCount += topCards.length;
       logInfo(
-        `Added ${cardResources.length} cards (${cardsResponse.data.length} total, source: ${cardsResponse.source})`
+        `Added ${topCards.length} top cards by views (from ${cardsResponse.data.length} total)`
       );
     }
 
-    // Add dashboards as resources
+    // Add top 20 dashboards based on views
     if (dashboardsResponse.data.length > 0) {
-      const dashboardResources = dashboardsResponse.data
+      const topDashboards = dashboardsResponse.data
         .filter((dashboard: any) => !dashboard.archived) // Only active dashboards
+        .sort((a: any, b: any) => (b.view_count || 0) - (a.view_count || 0)) // Sort by views descending
+        .slice(0, 20) // Top 20
         .map((dashboard: any) => ({
           uri: `metabase://dashboard/${dashboard.id}`,
           mimeType: 'application/json',
           name: `[Dashboard] ${dashboard.name}`,
-          description: `Dashboard: ${dashboard.name}${dashboard.description ? ` - ${dashboard.description}` : ''}`,
+          description: `Dashboard: ${dashboard.name}${dashboard.description ? ` - ${dashboard.description}` : ''}${
+            dashboard.view_count ? ` (${dashboard.view_count} views)` : ''
+          }`,
         }));
 
-      resources.push(...dashboardResources);
-      totalResourceCount += dashboardsResponse.data.length;
+      resources.push(...topDashboards);
+      totalResourceCount += topDashboards.length;
       logInfo(
-        `Added ${dashboardResources.length} dashboards (${dashboardsResponse.data.length} total, source: ${dashboardsResponse.source})`
+        `Added ${topDashboards.length} top dashboards by views (from ${dashboardsResponse.data.length} total)`
       );
     }
 
-    // Add databases as resources
+    // Add ROOT collections only (location: "/")
+    if (collectionsResponse.data.length > 0) {
+      const rootCollectionResources = collectionsResponse.data
+        .filter((collection: any) => !collection.personal_owner_id) // Exclude personal collections
+        .filter((collection: any) => collection.location === '/') // Only root collections
+        .map((collection: any) => ({
+          uri: `metabase://collection/${collection.id}`,
+          mimeType: 'application/json',
+          name: `[Collection] ${collection.name}`,
+          description: `Collection: ${collection.name}${collection.description ? ` - ${collection.description}` : ''}`,
+        }));
+
+      resources.push(...rootCollectionResources);
+      totalResourceCount += rootCollectionResources.length;
+      logInfo(
+        `Added ${rootCollectionResources.length} root collections (${collectionsResponse.data.length} total, filtered to location: "/")`
+      );
+    }
+
+    // Add ALL databases (important for navigation)
     if (databasesResponse.data.length > 0) {
       const databaseResources = databasesResponse.data
         .filter((database: any) => !database.is_sample) // Exclude sample databases
@@ -106,42 +133,35 @@ export async function handleListResources(
         }));
 
       resources.push(...databaseResources);
-      totalResourceCount += databasesResponse.data.length;
+      totalResourceCount += databaseResources.length;
       logInfo(
         `Added ${databaseResources.length} databases (${databasesResponse.data.length} total, source: ${databasesResponse.source})`
       );
     }
 
-    // Add tables as resources
-    if (tablesResponse.data.length > 0) {
-      const tableResources = tablesResponse.data
-        .filter((table: any) => table.active && !table.visibility_type) // Only active, visible tables
-        .map((table: any) => ({
-          uri: `metabase://schema/${table.db_id}/${table.name}`,
-          mimeType: 'application/json',
-          name: `[Table] ${table.display_name || table.name}`,
-          description: `Table: ${table.display_name || table.name} in ${table.db?.name || 'database'}${table.description ? ` - ${table.description}` : ''}`,
-        }));
-
-      resources.push(...tableResources);
-      totalResourceCount += tablesResponse.data.length;
-      logInfo(
-        `Added ${tableResources.length} tables (${tablesResponse.data.length} total, source: ${tablesResponse.source})`
-      );
-    }
-
-    // Sort resources by type (Cards, Dashboards, Databases, Tables)
+    // Sort resources by type priority for better organization
     const sortedResources = resources.sort((a, b) => {
-      const typeOrder = { card: 0, dashboard: 1, database: 2, schema: 3 };
-      const aType = a.uri.includes('/schema/')
-        ? 'schema'
-        : (a.uri.split('/')[2] as keyof typeof typeOrder);
-      const bType = b.uri.includes('/schema/')
-        ? 'schema'
-        : (b.uri.split('/')[2] as keyof typeof typeOrder);
+      const typeOrder = {
+        '[Card]': 0, // Top cards first
+        '[Dashboard]': 1, // Top dashboards second
+        '[Collection]': 2, // All collections third
+        '[Database]': 3, // All databases last
+      };
 
-      if (typeOrder[aType] !== typeOrder[bType]) {
-        return typeOrder[aType] - typeOrder[bType];
+      const getType = (name: string) => {
+        for (const key of Object.keys(typeOrder)) {
+          if (name.startsWith(key)) {
+            return typeOrder[key as keyof typeof typeOrder];
+          }
+        }
+        return 999; // Unknown type goes to the end
+      };
+
+      const aType = getType(a.name);
+      const bType = getType(b.name);
+
+      if (aType !== bType) {
+        return aType - bType;
       }
 
       // Within same type, sort alphabetically by name
@@ -149,7 +169,7 @@ export async function handleListResources(
     });
 
     logInfo(
-      `Successfully retrieved ${sortedResources.length} total resources from ${totalResourceCount} available items across all types`
+      `Successfully retrieved ${sortedResources.length} view-based resources (from ${totalResourceCount} total items)`
     );
 
     return { resources: sortedResources };
@@ -266,6 +286,11 @@ export async function handleReadResource(
     // Handle metric resource
     if ((match = uri.match(/^metabase:\/\/metric\/(\d+)$/))) {
       return await handleMetricResource(match[1], uri, apiClient, logDebug, logInfo);
+    }
+
+    // Handle collection resource
+    if ((match = uri.match(/^metabase:\/\/collection\/(\d+)$/))) {
+      return await handleCollectionResource(match[1], uri, apiClient, logDebug, logInfo);
     }
 
     logWarn(`Invalid URI format: ${uri}`, { requestId });
@@ -477,6 +502,90 @@ async function handleMetricResource(
       uri,
       mimeType: 'application/json',
       text: JSON.stringify(optimizedMetric, null, 2),
+    },
+  ];
+
+  return { contents };
+}
+
+/**
+ * Handle individual collection resource - returns collection items
+ */
+async function handleCollectionResource(
+  id: string,
+  uri: string,
+  apiClient: MetabaseApiClient,
+  logDebug: LogFunction,
+  logInfo: LogFunction
+) {
+  const collectionId = parseInt(id, 10);
+  logDebug(`Fetching collection items for collection ID: ${collectionId}`);
+
+  // Get both collection metadata and its items
+  const [collectionResponse, itemsResponse] = await Promise.all([
+    apiClient.getCollection(collectionId),
+    apiClient.getCollectionItems(collectionId),
+  ]);
+
+  const collection = collectionResponse.data;
+  const items = itemsResponse.data || [];
+
+  logInfo(`Successfully retrieved collection "${collection.name}" with ${items.length} items`);
+
+  // Organize items by type for better presentation
+  const organizedItems = {
+    cards: items.filter((item: any) => item.model === 'card'),
+    dashboards: items.filter((item: any) => item.model === 'dashboard'),
+    collections: items.filter((item: any) => item.model === 'collection'),
+    other: items.filter((item: any) => !['card', 'dashboard', 'collection'].includes(item.model)),
+  };
+
+  // Create response with collection metadata and organized items
+  const collectionWithItems = {
+    id: collection.id,
+    name: collection.name,
+    description: collection.description,
+    location: collection.location,
+    created_at: collection.created_at,
+    updated_at: collection.updated_at,
+    archived: collection.archived,
+    items: {
+      total_count: items.length,
+      cards: organizedItems.cards.map((card: any) => ({
+        id: card.id,
+        name: card.name,
+        description: card.description,
+        model: card.model,
+        view_count: card.view_count,
+      })),
+      dashboards: organizedItems.dashboards.map((dashboard: any) => ({
+        id: dashboard.id,
+        name: dashboard.name,
+        description: dashboard.description,
+        model: dashboard.model,
+        view_count: dashboard.view_count,
+      })),
+      collections: organizedItems.collections.map((subcollection: any) => ({
+        id: subcollection.id,
+        name: subcollection.name,
+        description: subcollection.description,
+        model: subcollection.model,
+      })),
+      other: organizedItems.other.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        model: item.model,
+      })),
+    },
+    retrieved_at: new Date().toISOString(),
+  };
+
+  const contents: ResourceContent[] = [
+    {
+      uri,
+      mimeType: 'application/json',
+      text: JSON.stringify(collectionWithItems, null, 2),
     },
   ];
 

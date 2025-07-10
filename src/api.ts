@@ -967,4 +967,36 @@ export class MetabaseApiClient {
     this.fieldCache.clear();
     this.logDebug('Fields cache cleared');
   }
+
+  /**
+   * Get items within a specific collection
+   * Returns cards, dashboards, and other items in the collection
+   */
+  async getCollectionItems(collectionId: number): Promise<CachedResponse<any[]>> {
+    const startTime = Date.now();
+
+    try {
+      this.logDebug(`Fetching items for collection ${collectionId} from Metabase API`);
+      const response = await this.request<any>(`/api/collection/${collectionId}/items`);
+      const fetchTime = Date.now() - startTime;
+
+      // Extract data array from response
+      const items = response.data || [];
+
+      this.logInfo(
+        `Successfully fetched ${items.length} items for collection ${collectionId} in ${fetchTime}ms`
+      );
+      return {
+        data: items,
+        source: 'api',
+        fetchTime,
+      };
+    } catch (error) {
+      this.logError(
+        `Failed to fetch items for collection ${collectionId} from Metabase API`,
+        error
+      );
+      throw error;
+    }
+  }
 }
