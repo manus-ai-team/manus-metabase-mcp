@@ -118,6 +118,36 @@ CACHE_TTL_MS=600000           # 10 minutes default
 REQUEST_TIMEOUT_MS=600000     # 10 minutes default
 ```
 
+## DXT Package Management
+
+The project includes DXT (Desktop Extension) package management for easy distribution.
+
+### Building DXT Packages
+```bash
+# Build versioned DXT package
+npm run dxt:build
+
+# Validate manifest structure
+npm run dxt:validate
+```
+
+### Platform Compatibility
+The DXT package supports cross-platform deployment:
+- **macOS** (darwin)
+- **Windows** (win32)  
+- **Linux** (linux)
+
+Platform compatibility is declared in `manifest.json` with runtime requirements:
+```json
+"compatibility": {
+  "claude_desktop": ">=0.11.0",
+  "platforms": ["darwin", "win32", "linux"],
+  "runtimes": {
+    "node": ">=18.0.0"
+  }
+}
+```
+
 ## Testing Architecture
 
 The project uses Vitest with comprehensive test coverage:
