@@ -736,6 +736,49 @@ export function optimizeCollectionResponse(
     }));
   }
 
+  // Include collection items if they exist (from enhanced collection retrieval)
+  if (collection.items && Array.isArray(collection.items)) {
+    // Organize items by type for better presentation, similar to resources handler
+    const organizedItems = {
+      cards: collection.items.filter((item: any) => item.model === 'card'),
+      dashboards: collection.items.filter((item: any) => item.model === 'dashboard'),
+      collections: collection.items.filter((item: any) => item.model === 'collection'),
+      other: collection.items.filter(
+        (item: any) => !['card', 'dashboard', 'collection'].includes(item.model)
+      ),
+    };
+
+    (optimized as any).items = {
+      total_count: collection.items.length,
+      cards: organizedItems.cards.map((card: any) => ({
+        id: card.id,
+        name: card.name,
+        description: card.description,
+        model: card.model,
+        view_count: card.view_count,
+      })),
+      dashboards: organizedItems.dashboards.map((dashboard: any) => ({
+        id: dashboard.id,
+        name: dashboard.name,
+        description: dashboard.description,
+        model: dashboard.model,
+        view_count: dashboard.view_count,
+      })),
+      collections: organizedItems.collections.map((subcollection: any) => ({
+        id: subcollection.id,
+        name: subcollection.name,
+        description: subcollection.description,
+        model: subcollection.model,
+      })),
+      other: organizedItems.other.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        model: item.model,
+      })),
+    };
+  }
+
   return optimized;
 }
 
