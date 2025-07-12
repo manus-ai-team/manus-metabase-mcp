@@ -14,8 +14,6 @@ describe('Resource Handlers', () => {
     mockApiClient = {
       getSessionToken: vi.fn().mockResolvedValue('test-token'),
       getCurrentUser: vi.fn(),
-      getCardsList: vi.fn(),
-      getDashboardsList: vi.fn(),
       getCollectionsList: vi.fn(),
       getDatabasesList: vi.fn(),
       getCollection: vi.fn(),
@@ -30,31 +28,8 @@ describe('Resource Handlers', () => {
     };
   });
 
-  describe('handleListResources - View-Based Approach', () => {
-    it('should list top 20 cards, top 20 dashboards, all collections, and all databases', async () => {
-      // Mock data with 25 cards - should get top 20 by views
-      const mockCards = {
-        data: Array.from({ length: 25 }, (_, i) => ({
-          id: i + 1,
-          name: `Card ${i + 1}`,
-          description: `Description for card ${i + 1}`,
-          view_count: 100 - i, // Descending view counts
-          archived: false
-        })),
-        source: 'api'
-      };
-
-      // Mock data with 25 dashboards - should get top 20 by views
-      const mockDashboards = {
-        data: Array.from({ length: 25 }, (_, i) => ({
-          id: i + 1,
-          name: `Dashboard ${i + 1}`,
-          description: `Description for dashboard ${i + 1}`,
-          view_count: 200 - i, // Descending view counts
-          archived: false
-        })),
-        source: 'api'
-      };
+  describe('handleListResources - Collections and Databases Only', () => {
+    it('should list collections and databases only (no cards or dashboards)', async () => {
 
       const mockCollections = {
         data: [
@@ -107,8 +82,6 @@ describe('Resource Handlers', () => {
       };
 
       mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 5 }, source: 'api' });
-      mockApiClient.getCardsList.mockResolvedValue(mockCards);
-      mockApiClient.getDashboardsList.mockResolvedValue(mockDashboards);
       mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
       mockApiClient.getDatabasesList.mockResolvedValue(mockDatabases);
 
@@ -119,24 +92,10 @@ describe('Resource Handlers', () => {
         mockLoggers.logError
       );
 
-      // Check that all API methods were called
+      // Check that API methods were called (no longer calling cards/dashboards)
       expect(mockApiClient.getCurrentUser).toHaveBeenCalled();
-      expect(mockApiClient.getCardsList).toHaveBeenCalled();
-      expect(mockApiClient.getDashboardsList).toHaveBeenCalled();
       expect(mockApiClient.getCollectionsList).toHaveBeenCalled();
       expect(mockApiClient.getDatabasesList).toHaveBeenCalled();
-
-      // Should have exactly 20 cards (top by views)
-      const cardResources = result.resources.filter(r => r.name.startsWith('[Card]'));
-      expect(cardResources).toHaveLength(20);
-      expect(cardResources[0].name).toBe('[Card] Card 1'); // Highest view count
-      expect(cardResources[0].description).toContain('100 views');
-
-      // Should have exactly 20 dashboards (top by views)
-      const dashboardResources = result.resources.filter(r => r.name.startsWith('[Dashboard]'));
-      expect(dashboardResources).toHaveLength(20);
-      expect(dashboardResources[0].name).toBe('[Dashboard] Dashboard 1'); // Highest view count
-      expect(dashboardResources[0].description).toContain('200 views');
 
       // Should have 3 collections: 2 root collections + 1 personal collection (user ID = 5)
       const collectionResources = result.resources.filter(r => r.name.startsWith('[Collection]'));
@@ -150,14 +109,12 @@ describe('Resource Handlers', () => {
       expect(databaseResources).toHaveLength(1);
       expect(databaseResources[0].name).toBe('[Database] Production DB');
 
-      // Total should be 20 + 20 + 3 + 1 = 44
-      expect(result.resources).toHaveLength(44);
+      // Total should be 3 + 1 = 4
+      expect(result.resources).toHaveLength(4);
     });
 
     it('should handle empty responses gracefully', async () => {
       mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 1 }, source: 'api' });
-      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
-      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
       mockApiClient.getCollectionsList.mockResolvedValue({ data: [], source: 'api' });
       mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
 
@@ -171,28 +128,18 @@ describe('Resource Handlers', () => {
       expect(result.resources).toEqual([]);
     });
 
-    it('should filter archived cards and dashboards', async () => {
-      const mockCards = {
+    it('should filter sample databases', async () => {
+      const mockDatabases = {
         data: [
-          { id: 1, name: 'Active Card', view_count: 100, archived: false },
-          { id: 2, name: 'Archived Card', view_count: 200, archived: true }
-        ],
-        source: 'api'
-      };
-
-      const mockDashboards = {
-        data: [
-          { id: 1, name: 'Active Dashboard', view_count: 100, archived: false },
-          { id: 2, name: 'Archived Dashboard', view_count: 200, archived: true }
+          { id: 1, name: 'Production DB', engine: 'postgres', is_sample: false },
+          { id: 2, name: 'Sample Database', engine: 'h2', is_sample: true }
         ],
         source: 'api'
       };
 
       mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 1 }, source: 'api' });
-      mockApiClient.getCardsList.mockResolvedValue(mockCards);
-      mockApiClient.getDashboardsList.mockResolvedValue(mockDashboards);
       mockApiClient.getCollectionsList.mockResolvedValue({ data: [], source: 'api' });
-      mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
+      mockApiClient.getDatabasesList.mockResolvedValue(mockDatabases);
 
       const result = await handleListResources(
         { method: 'list' } as any,
@@ -201,14 +148,10 @@ describe('Resource Handlers', () => {
         mockLoggers.logError
       );
 
-      // Should only include active cards and dashboards
-      const cardResources = result.resources.filter(r => r.name.startsWith('[Card]'));
-      expect(cardResources).toHaveLength(1);
-      expect(cardResources[0].name).toBe('[Card] Active Card');
-
-      const dashboardResources = result.resources.filter(r => r.name.startsWith('[Dashboard]'));
-      expect(dashboardResources).toHaveLength(1);
-      expect(dashboardResources[0].name).toBe('[Dashboard] Active Dashboard');
+      // Should only include non-sample databases
+      const databaseResources = result.resources.filter(r => r.name.startsWith('[Database]'));
+      expect(databaseResources).toHaveLength(1);
+      expect(databaseResources[0].name).toBe('[Database] Production DB');
     });
 
     it('should include user\'s own personal collection but exclude others', async () => {
@@ -238,8 +181,6 @@ describe('Resource Handlers', () => {
       };
 
       mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 123 }, source: 'api' });
-      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
-      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
       mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
       mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
 
@@ -278,8 +219,6 @@ describe('Resource Handlers', () => {
       };
 
       mockApiClient.getCurrentUser.mockRejectedValue(new Error('Failed to get user'));
-      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
-      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
       mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
       mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
 
@@ -321,8 +260,6 @@ describe('Resource Handlers', () => {
       };
 
       mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 123 }, source: 'api' });
-      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
-      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
       mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
       mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
 
@@ -368,8 +305,6 @@ describe('Resource Handlers', () => {
       };
 
       mockApiClient.getCurrentUser.mockResolvedValue({ data: { id: 123 }, source: 'api' });
-      mockApiClient.getCardsList.mockResolvedValue({ data: [], source: 'api' });
-      mockApiClient.getDashboardsList.mockResolvedValue({ data: [], source: 'api' });
       mockApiClient.getCollectionsList.mockResolvedValue(mockCollections);
       mockApiClient.getDatabasesList.mockResolvedValue({ data: [], source: 'api' });
 

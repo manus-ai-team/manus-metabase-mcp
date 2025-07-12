@@ -186,6 +186,43 @@ The server implements aggressive response optimization to reduce token usage:
 - **Rate Limiting**: Prevents API overload
 - **Performance Metrics**: Real-time processing statistics
 
+## MCP Design Patterns: Resources vs Tools
+
+### Core Distinction
+Per MCP documentation, there's a fundamental difference between Resources and Tools:
+
+**Resources (Application-Controlled)**
+- Users/clients explicitly select and read them
+- Represent passive, relatively stable data
+- Read-only access to specific content
+- Good for: file contents, database records, API responses
+- Examples: `metabase://dashboard/123`, `metabase://table/456`
+
+**Tools (Model-Controlled)**
+- AI models automatically invoke them
+- Enable dynamic actions and computations
+- Can modify state or interact with external systems
+- Good for: search operations, data processing, workflow actions
+- Examples: `search`, `execute_query`, `export`
+
+### Design Rule: Avoid Overlap
+**NEVER implement the same functionality as both a Resource and Tool**. This violates MCP principles and creates confusion. For example:
+- ❌ Wrong: Having both a `search` tool AND a `metabase://search/{query}` resource
+- ✅ Right: Search as tool only (dynamic operation), specific items as resources
+
+### When to Use Each
+**Use Resources for:**
+- Static data access by ID
+- User-specific views (e.g., user's dashboards)
+- Content that doesn't require processing
+- Reference data
+
+**Use Tools for:**
+- Dynamic operations requiring parameters
+- Search, filtering, or querying
+- Data transformation or processing
+- Any operation that modifies state
+
 ## MCP Tools Available
 
 ### Core Data Access

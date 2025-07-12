@@ -1,7 +1,6 @@
 import { generateRequestId } from '../../utils/index.js';
 import { ErrorCode, McpError } from '../../types/core.js';
 import { MetabaseApiClient } from '../../api.js';
-import { getQueryTemplate } from './templates.js';
 import {
   optimizeDashboardResource,
   optimizeCardResource,
@@ -47,70 +46,17 @@ export async function handleListResources(
       logError('Failed to fetch current user info, will exclude all personal collections', error);
     }
 
-    // Fetch core data: cards, dashboards, collections, and databases
-    const [cardsResponse, dashboardsResponse, collectionsResponse, databasesResponse] =
-      await Promise.all([
-        apiClient.getCardsList().catch(error => {
-          logError('Failed to fetch cards', error);
-          return { data: [], source: 'error' };
-        }),
-        apiClient.getDashboardsList().catch(error => {
-          logError('Failed to fetch dashboards', error);
-          return { data: [], source: 'error' };
-        }),
-        apiClient.getCollectionsList().catch(error => {
-          logError('Failed to fetch collections', error);
-          return { data: [], source: 'error' };
-        }),
-        apiClient.getDatabasesList().catch(error => {
-          logError('Failed to fetch databases', error);
-          return { data: [], source: 'error' };
-        }),
-      ]);
-
-    // Add top 20 cards based on views
-    if (cardsResponse.data.length > 0) {
-      const topCards = cardsResponse.data
-        .filter((card: any) => !card.archived) // Only active cards
-        .sort((a: any, b: any) => (b.view_count || 0) - (a.view_count || 0)) // Sort by views descending
-        .slice(0, 20) // Top 20
-        .map((card: any) => ({
-          uri: `metabase://card/${card.id}`,
-          mimeType: 'application/json',
-          name: `[Card] ${card.name}`,
-          description: `Card: ${card.name}${card.description ? ` - ${card.description}` : ''}${
-            card.view_count ? ` (${card.view_count} views)` : ''
-          }`,
-        }));
-
-      resources.push(...topCards);
-      totalResourceCount += topCards.length;
-      logInfo(
-        `Added ${topCards.length} top cards by views (from ${cardsResponse.data.length} total)`
-      );
-    }
-
-    // Add top 20 dashboards based on views
-    if (dashboardsResponse.data.length > 0) {
-      const topDashboards = dashboardsResponse.data
-        .filter((dashboard: any) => !dashboard.archived) // Only active dashboards
-        .sort((a: any, b: any) => (b.view_count || 0) - (a.view_count || 0)) // Sort by views descending
-        .slice(0, 20) // Top 20
-        .map((dashboard: any) => ({
-          uri: `metabase://dashboard/${dashboard.id}`,
-          mimeType: 'application/json',
-          name: `[Dashboard] ${dashboard.name}`,
-          description: `Dashboard: ${dashboard.name}${dashboard.description ? ` - ${dashboard.description}` : ''}${
-            dashboard.view_count ? ` (${dashboard.view_count} views)` : ''
-          }`,
-        }));
-
-      resources.push(...topDashboards);
-      totalResourceCount += topDashboards.length;
-      logInfo(
-        `Added ${topDashboards.length} top dashboards by views (from ${dashboardsResponse.data.length} total)`
-      );
-    }
+    // Fetch core data: collections and databases
+    const [collectionsResponse, databasesResponse] = await Promise.all([
+      apiClient.getCollectionsList().catch(error => {
+        logError('Failed to fetch collections', error);
+        return { data: [], source: 'error' };
+      }),
+      apiClient.getDatabasesList().catch(error => {
+        logError('Failed to fetch databases', error);
+        return { data: [], source: 'error' };
+      }),
+    ]);
 
     // Add ROOT collections only (location: "/") and user's own personal collection
     if (collectionsResponse.data.length > 0) {
@@ -163,10 +109,8 @@ export async function handleListResources(
     // Sort resources by type priority for better organization
     const sortedResources = resources.sort((a, b) => {
       const typeOrder = {
-        '[Card]': 0, // Top cards first
-        '[Dashboard]': 1, // Top dashboards second
-        '[Collection]': 2, // All collections third
-        '[Database]': 3, // All databases last
+        '[Collection]': 0, // Collections first
+        '[Database]': 1, // Databases second
       };
 
       const getType = (name: string) => {
@@ -186,7 +130,7 @@ export async function handleListResources(
       }
 
       // Within collections, prioritize personal collections first
-      if (aType === 2 && bType === 2) {
+      if (aType === 0 && bType === 0) {
         // Both are collections
         const aIsPersonal = (a as any).isPersonal || false;
         const bIsPersonal = (b as any).isPersonal || false;
@@ -247,25 +191,37 @@ export async function handleListResourceTemplates(
       uriTemplate: 'metabase://database/{id}',
       name: 'Database by ID',
       mimeType: 'application/json',
-      description: 'Get a Metabase database by its ID',
+      description: 'Get a Metabase database with its tables and metadata',
     },
     {
-      uriTemplate: 'metabase://schema/{database_id}/{table_name}',
-      name: 'Table Schema',
+      uriTemplate: 'metabase://table/{id}',
+      name: 'Table by ID',
       mimeType: 'application/json',
-      description: 'Get detailed schema information for a specific table',
+      description: 'Get table schema, fields, and metadata by table ID',
     },
     {
-      uriTemplate: 'metabase://query-template/{category}',
-      name: 'Query Template',
-      mimeType: 'text/plain',
-      description: 'Get SQL query templates by category (joins, aggregations, filters, etc.)',
+      uriTemplate: 'metabase://field/{id}',
+      name: 'Field by ID',
+      mimeType: 'application/json',
+      description: 'Get detailed field information including type, constraints, and relationships',
+    },
+    {
+      uriTemplate: 'metabase://collection/{id}',
+      name: 'Collection by ID',
+      mimeType: 'application/json',
+      description: 'Get collection details with all items (cards, dashboards, sub-collections)',
     },
     {
       uriTemplate: 'metabase://metric/{id}',
-      name: 'Business Metric',
+      name: 'Metric by ID',
       mimeType: 'application/json',
-      description: 'Get business metric definition and calculation details',
+      description: 'Get metric definition and calculation details by its ID',
+    },
+    {
+      uriTemplate: 'metabase://recent/{model}',
+      name: 'Recent Items',
+      mimeType: 'application/json',
+      description: 'Get recently viewed items by model type (card, dashboard, table)',
     },
   ];
 
@@ -310,29 +266,34 @@ export async function handleReadResource(
       return await handleCardResource(match[1], uri, apiClient, logDebug, logInfo);
     }
 
-    // Handle database resource
+    // Handle database resource (includes tables)
     if ((match = uri.match(/^metabase:\/\/database\/(\d+)$/))) {
       return await handleDatabaseResource(match[1], uri, apiClient, logDebug, logInfo);
     }
 
-    // Handle table schema resource
-    if ((match = uri.match(/^metabase:\/\/schema\/(\d+)\/(.+)$/))) {
-      return await handleSchemaResource(match[1], match[2], uri, apiClient, logDebug, logInfo);
+    // Handle table resource (includes fields)
+    if ((match = uri.match(/^metabase:\/\/table\/(\d+)$/))) {
+      return await handleTableResource(match[1], uri, apiClient, logDebug, logInfo);
     }
 
-    // Handle query template resource
-    if ((match = uri.match(/^metabase:\/\/query-template\/(.+)$/))) {
-      return await handleQueryTemplateResource(match[1], uri, logDebug);
+    // Handle field resource
+    if ((match = uri.match(/^metabase:\/\/field\/(\d+)$/))) {
+      return await handleFieldResource(match[1], uri, apiClient, logDebug, logInfo);
+    }
+
+    // Handle collection resource (includes items)
+    if ((match = uri.match(/^metabase:\/\/collection\/(\d+)$/))) {
+      return await handleCollectionResource(match[1], uri, apiClient, logDebug, logInfo);
+    }
+
+    // Handle recent items resource
+    if ((match = uri.match(/^metabase:\/\/recent\/(.+)$/))) {
+      return await handleRecentItemsResource(match[1], uri, apiClient, logDebug, logInfo);
     }
 
     // Handle metric resource
     if ((match = uri.match(/^metabase:\/\/metric\/(\d+)$/))) {
       return await handleMetricResource(match[1], uri, apiClient, logDebug, logInfo);
-    }
-
-    // Handle collection resource
-    if ((match = uri.match(/^metabase:\/\/collection\/(\d+)$/))) {
-      return await handleCollectionResource(match[1], uri, apiClient, logDebug, logInfo);
     }
 
     logWarn(`Invalid URI format: ${uri}`, { requestId });
@@ -447,33 +408,21 @@ async function handleDatabaseResource(
 }
 
 /**
- * Handle table schema resource
+ * Handle table resource (by table ID only)
  */
-async function handleSchemaResource(
-  databaseId: string,
-  tableName: string,
+async function handleTableResource(
+  id: string,
   uri: string,
   apiClient: MetabaseApiClient,
   logDebug: LogFunction,
   logInfo: LogFunction
 ) {
-  const dbId = parseInt(databaseId, 10);
-  logDebug(`Fetching schema for table: ${tableName} in database: ${dbId}`);
+  const tableId = parseInt(id, 10);
+  logDebug(`Fetching table with ID: ${tableId}`);
 
-  // Get tables from database and find the matching one
-  const dbResponse = await apiClient.getDatabase(dbId);
-  const table = dbResponse.data.tables?.find((t: any) => t.name === tableName);
-
-  if (!table) {
-    throw new McpError(
-      ErrorCode.InvalidRequest,
-      `Table '${tableName}' not found in database ${dbId}`
-    );
-  }
-
-  const tableResponse = await apiClient.getTable(table.id);
+  const tableResponse = await apiClient.getTable(tableId);
   logInfo(
-    `Successfully retrieved schema for table: ${tableName} (source: ${tableResponse.source})`
+    `Successfully retrieved table: ${tableResponse.data.name || tableId} (source: ${tableResponse.source})`
   );
 
   // Optimize the table response to reduce token usage significantly
@@ -491,18 +440,60 @@ async function handleSchemaResource(
 }
 
 /**
- * Handle query template resource
+ * Handle field resource
  */
-async function handleQueryTemplateResource(category: string, uri: string, logDebug: LogFunction) {
-  logDebug(`Fetching query template for category: ${category}`);
+async function handleFieldResource(
+  id: string,
+  uri: string,
+  apiClient: MetabaseApiClient,
+  logDebug: LogFunction,
+  logInfo: LogFunction
+) {
+  const fieldId = parseInt(id, 10);
+  logDebug(`Fetching field with ID: ${fieldId}`);
 
-  const templates = getQueryTemplate(category);
+  const fieldResponse = await apiClient.getField(fieldId);
+  logInfo(
+    `Successfully retrieved field: ${fieldResponse.data.name || fieldId} (source: ${fieldResponse.source})`
+  );
+
+  // Create optimized field response
+  const field = fieldResponse.data;
+  const optimizedField = {
+    id: field.id,
+    name: field.name,
+    display_name: field.display_name,
+    description: field.description,
+    base_type: field.base_type,
+    semantic_type: field.semantic_type,
+    field_type: field.field_type,
+    position: field.position,
+    visibility_type: field.visibility_type,
+    nullable: field.nullable,
+    auto_increment: field.auto_increment,
+    pk: field.pk,
+    unique: field.unique,
+    table_id: field.table_id,
+    database_id: field.database_id,
+    fk_target_field_id: field.fk_target_field_id,
+    target: field.target,
+    fingerprint: field.fingerprint,
+    has_field_values: field.has_field_values,
+    dimensions: field.dimensions,
+    values: field.values,
+    settings: field.settings,
+    caveats: field.caveats,
+    points_of_interest: field.points_of_interest,
+    created_at: field.created_at,
+    updated_at: field.updated_at,
+    retrieved_at: new Date().toISOString(),
+  };
 
   const contents: ResourceContent[] = [
     {
       uri,
-      mimeType: 'text/plain',
-      text: templates,
+      mimeType: 'application/json',
+      text: JSON.stringify(optimizedField, null, 2),
     },
   ];
 
@@ -628,6 +619,75 @@ async function handleCollectionResource(
       uri,
       mimeType: 'application/json',
       text: JSON.stringify(collectionWithItems, null, 2),
+    },
+  ];
+
+  return { contents };
+}
+
+/**
+ * Handle recent items resource - get recently viewed items by model type
+ */
+async function handleRecentItemsResource(
+  model: string,
+  uri: string,
+  apiClient: MetabaseApiClient,
+  logDebug: LogFunction,
+  logInfo: LogFunction
+) {
+  logDebug(`Fetching recent items for model: ${model}`);
+
+  // Validate model type
+  const validModels = ['card', 'dashboard', 'table'];
+  if (!validModels.includes(model)) {
+    throw new McpError(
+      ErrorCode.InvalidRequest,
+      `Invalid model type: ${model}. Valid models are: ${validModels.join(', ')}`
+    );
+  }
+
+  // Use search API to get recent items
+  const searchParams = new URLSearchParams();
+  searchParams.append('models', model);
+  searchParams.append('limit', '50');
+
+  const searchResponse = await apiClient.request<any>(`/api/search?${searchParams.toString()}`);
+  const items = searchResponse.data || searchResponse;
+
+  // Sort by last_viewed_at if available, otherwise by updated_at
+  const sortedItems = items
+    .filter((item: any) => !item.archived)
+    .sort((a: any, b: any) => {
+      const aDate = new Date(a.last_viewed_at || a.updated_at || 0).getTime();
+      const bDate = new Date(b.last_viewed_at || b.updated_at || 0).getTime();
+      return bDate - aDate;
+    })
+    .slice(0, 20); // Top 20 most recent
+
+  logInfo(`Successfully retrieved ${sortedItems.length} recent ${model} items`);
+
+  const recentItems = {
+    model,
+    items: sortedItems.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      collection_id: item.collection_id,
+      collection_name: item.collection?.name,
+      last_viewed_at: item.last_viewed_at,
+      view_count: item.view_count,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    })),
+    item_count: sortedItems.length,
+    retrieved_at: new Date().toISOString(),
+  };
+
+  const contents: ResourceContent[] = [
+    {
+      uri,
+      mimeType: 'application/json',
+      text: JSON.stringify(recentItems, null, 2),
     },
   ];
 
