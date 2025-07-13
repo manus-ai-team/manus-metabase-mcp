@@ -645,6 +645,125 @@ describe('handleExecute (execute command)', () => {
       ).rejects.toThrow(McpError);
     });
 
+    it('should handle card parameter validation errors with improved error messaging', async () => {
+      const parameterError = {
+        response: {
+          status: 400,
+          data: {
+            error_type: 'invalid-parameter',
+            'ex-data': {
+              tag: {
+                id: 'param-id',
+                name: 'user_id',
+                'display-name': 'User ID',
+                type: 'id',
+                dimension: ['template-tag', 'user_id']
+              },
+              type: 'invalid-parameter',
+              params: [
+                {
+                  value: 'john_doe',
+                  id: 'param-id',
+                  type: 'id',
+                  target: ['dimension', ['template-tag', 'user_id']],
+                  slug: 'user_id'
+                }
+              ]
+            }
+          }
+        }
+      };
+      
+      mockApiClient.request.mockRejectedValue(parameterError);
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const request = createMockRequest('execute', {
+        card_id: 123,
+        card_parameters: [
+          {
+            id: 'param-id',
+            slug: 'user_id',
+            target: ['dimension', ['template-tag', 'user_id']],
+            type: 'id',
+            value: 'john_doe' // String value for ID parameter type
+          }
+        ]
+      });
+
+      await expect(
+        handleExecute(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+
+      // Verify that parameter validation error was logged
+      expect(mockLogger.logError).toHaveBeenCalledWith(
+        'Card parameter validation failed for card 123',
+        parameterError.response.data
+      );
+    });
+
+    it('should handle card parameter errors embedded in successful HTTP responses', async () => {
+      // This simulates the real scenario where Metabase returns HTTP 200 but with error details embedded
+      const successfulResponseWithError = {
+        error_type: 'invalid-parameter',
+        status: 'failed',
+        error: 'For input string: "314 Studios"',
+        via: [
+          {
+            status: 'failed',
+            error: 'Error determining value for parameter "cp_id": For input string: "314 Studios"',
+            error_type: 'invalid-parameter',
+            'ex-data': {
+              tag: {
+                id: 'b86c100e-87cb-09d6-7c33-e58cd2cdbcb2',
+                name: 'cp_id',
+                'display-name': 'CP ID(s)',
+                type: 'dimension',
+                dimension: ['field', 2347, null],
+                'widget-type': 'id'
+              },
+              type: 'invalid-parameter',
+              params: [
+                {
+                  value: '314 Studios',
+                  id: 'b86c100e-87cb-09d6-7c33-e58cd2cdbcb2',
+                  type: 'id',
+                  target: ['dimension', ['template-tag', 'cp_id']],
+                  slug: 'cp_id'
+                }
+              ]
+            }
+          }
+        ],
+        data: { rows: [], cols: [] }
+      };
+      
+      mockApiClient.request.mockResolvedValue(successfulResponseWithError);
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const request = createMockRequest('execute', {
+        card_id: 3199,
+        card_parameters: [
+          {
+            id: 'b86c100e-87cb-09d6-7c33-e58cd2cdbcb2',
+            slug: 'cp_id',
+            target: ['dimension', ['template-tag', 'cp_id']],
+            type: 'id',
+            value: '314 Studios' // String value for ID parameter type (should be numeric)
+          }
+        ]
+      });
+
+      await expect(
+        handleExecute(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+
+      // Verify that parameter validation error was logged
+      expect(mockLogger.logError).toHaveBeenCalledWith(
+        'Card execution parameter validation failed for 3199',
+        successfulResponseWithError
+      );
+    });
+
     it('should log card execution information', async () => {
       mockApiClient.request.mockResolvedValue(sampleCardResult);
       const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();

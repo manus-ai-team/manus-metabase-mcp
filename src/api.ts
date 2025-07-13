@@ -967,4 +967,59 @@ export class MetabaseApiClient {
     this.fieldCache.clear();
     this.logDebug('Fields cache cleared');
   }
+
+  /**
+   * Get items within a specific collection
+   * Returns cards, dashboards, and other items in the collection
+   */
+  async getCollectionItems(collectionId: number): Promise<CachedResponse<any[]>> {
+    const startTime = Date.now();
+
+    try {
+      this.logDebug(`Fetching items for collection ${collectionId} from Metabase API`);
+      const response = await this.request<any>(`/api/collection/${collectionId}/items`);
+      const fetchTime = Date.now() - startTime;
+
+      // Extract data array from response
+      const items = response.data || [];
+
+      this.logInfo(
+        `Successfully fetched ${items.length} items for collection ${collectionId} in ${fetchTime}ms`
+      );
+      return {
+        data: items,
+        source: 'api',
+        fetchTime,
+      };
+    } catch (error) {
+      this.logError(
+        `Failed to fetch items for collection ${collectionId} from Metabase API`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get current user information to determine user ID for personal collection filtering
+   */
+  async getCurrentUser(): Promise<CachedResponse<any>> {
+    const startTime = Date.now();
+
+    try {
+      this.logDebug('Fetching current user information from Metabase API');
+      const user = await this.request<any>('/api/user/current');
+      const fetchTime = Date.now() - startTime;
+
+      this.logInfo(`Successfully fetched current user information in ${fetchTime}ms`);
+      return {
+        data: user,
+        source: 'api',
+        fetchTime,
+      };
+    } catch (error) {
+      this.logError('Failed to fetch current user information from Metabase API', error);
+      throw error;
+    }
+  }
 }

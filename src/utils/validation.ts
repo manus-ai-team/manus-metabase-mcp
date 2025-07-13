@@ -5,20 +5,6 @@
 import { ErrorCode, McpError } from '../types/core.js';
 
 /**
- * Validate that a value is a positive integer
- */
-export function isPositiveInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0;
-}
-
-/**
- * Validate that a string is not empty after trimming
- */
-export function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-/**
  * Validate positive integer with detailed error message
  */
 export function validatePositiveInteger(
@@ -138,16 +124,6 @@ export function validateNonEmptyString(
 }
 
 /**
- * Normalize string to lowercase for case-insensitive comparison
- */
-export function normalizeString(value: string | undefined, defaultValue: string = ''): string {
-  if (!value || typeof value !== 'string') {
-    return defaultValue.toLowerCase();
-  }
-  return value.toLowerCase();
-}
-
-/**
  * Validate enum value with case-insensitive matching
  */
 export function validateEnumValue<T extends string>(
@@ -177,36 +153,6 @@ export function validateEnumValue<T extends string>(
   }
 
   return validValue;
-}
-
-/**
- * Convert parameter to boolean safely
- */
-export function toBooleanSafe(value: unknown): boolean {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (typeof value === 'string') {
-    return value.toLowerCase() === 'true';
-  }
-  if (typeof value === 'number') {
-    return value !== 0;
-  }
-  return Boolean(value);
-}
-
-/**
- * Safely parse a number with fallback
- */
-export function parseNumberSafe(value: unknown, fallback: number = 0): number {
-  if (typeof value === 'number' && !isNaN(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    const parsed = parseFloat(value);
-    return isNaN(parsed) ? fallback : parsed;
-  }
-  return fallback;
 }
 
 /**

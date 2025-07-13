@@ -45,6 +45,9 @@ npm run dev:watch
 
 # Single development run
 npm run dev
+
+# Build versioned DXT package
+npm run dxt:build
 ```
 
 ### Code Quality
@@ -115,6 +118,36 @@ CACHE_TTL_MS=600000           # 10 minutes default
 REQUEST_TIMEOUT_MS=600000     # 10 minutes default
 ```
 
+## DXT Package Management
+
+The project includes DXT (Desktop Extension) package management for easy distribution.
+
+### Building DXT Packages
+```bash
+# Build versioned DXT package
+npm run dxt:build
+
+# Validate manifest structure
+npm run dxt:validate
+```
+
+### Platform Compatibility
+The DXT package supports cross-platform deployment:
+- **macOS** (darwin)
+- **Windows** (win32)  
+- **Linux** (linux)
+
+Platform compatibility is declared in `manifest.json` with runtime requirements:
+```json
+"compatibility": {
+  "claude_desktop": ">=0.11.0",
+  "platforms": ["darwin", "win32", "linux"],
+  "runtimes": {
+    "node": ">=18.0.0"
+  }
+}
+```
+
 ## Testing Architecture
 
 The project uses Vitest with comprehensive test coverage:
@@ -124,6 +157,12 @@ The project uses Vitest with comprehensive test coverage:
 - **CI Integration**: Automated testing across Node.js versions (18.x, 20.x, 22.x)
 
 Test files are located in `tests/` directory with structure mirroring `src/handlers/`.
+
+### Testing Patterns
+- **API Client Testing**: Do NOT create dedicated tests for individual API client methods (e.g., `tests/api.test.ts`)
+- **Handler-Level Mocking**: All API interactions should be mocked at the handler level in handler tests
+- **Consistent Pattern**: Follow the established pattern where `tests/handlers/` contains tests that mock the entire API client
+- **No Redundant Tests**: Avoid creating separate API client tests when the methods are already tested through handler tests
 
 ## Performance Optimizations
 
@@ -146,6 +185,43 @@ The server implements aggressive response optimization to reduce token usage:
 - **Batch Operations**: Controlled concurrency for retrieve operations
 - **Rate Limiting**: Prevents API overload
 - **Performance Metrics**: Real-time processing statistics
+
+## MCP Design Patterns: Resources vs Tools
+
+### Core Distinction
+Per MCP documentation, there's a fundamental difference between Resources and Tools:
+
+**Resources (Application-Controlled)**
+- Users/clients explicitly select and read them
+- Represent passive, relatively stable data
+- Read-only access to specific content
+- Good for: file contents, database records, API responses
+- Examples: `metabase://dashboard/123`, `metabase://table/456`
+
+**Tools (Model-Controlled)**
+- AI models automatically invoke them
+- Enable dynamic actions and computations
+- Can modify state or interact with external systems
+- Good for: search operations, data processing, workflow actions
+- Examples: `search`, `execute_query`, `export`
+
+### Design Rule: Avoid Overlap
+**NEVER implement the same functionality as both a Resource and Tool**. This violates MCP principles and creates confusion. For example:
+- ❌ Wrong: Having both a `search` tool AND a `metabase://search/{query}` resource
+- ✅ Right: Search as tool only (dynamic operation), specific items as resources
+
+### When to Use Each
+**Use Resources for:**
+- Static data access by ID
+- User-specific views (e.g., user's dashboards)
+- Content that doesn't require processing
+- Reference data
+
+**Use Tools for:**
+- Dynamic operations requiring parameters
+- Search, filtering, or querying
+- Data transformation or processing
+- Any operation that modifies state
 
 ## MCP Tools Available
 

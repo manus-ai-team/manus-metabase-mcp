@@ -17,6 +17,7 @@ import {
   sampleTable,
   sampleDatabase,
   sampleCollection,
+  sampleCollectionItems,
   sampleField
 } from '../setup.js';
 
@@ -648,15 +649,46 @@ describe('handleRetrieve', () => {
   });
 
   describe('Collection retrieval', () => {
-    it('should successfully retrieve collections', async () => {
+    it('should successfully retrieve collections with items', async () => {
       mockApiClient.getCollection.mockResolvedValue(createCachedResponse(sampleCollection));
+      mockApiClient.getCollectionItems.mockResolvedValue(createCachedResponse(sampleCollectionItems));
       const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
 
       const request = createMockRequest('retrieve', { model: 'collection', ids: [1] });
       const result = await handleRetrieve(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError);
 
       expect(mockApiClient.getCollection).toHaveBeenCalledWith(1);
+      expect(mockApiClient.getCollectionItems).toHaveBeenCalledWith(1);
       expect(result.content[0].text).toContain('Test Collection');
+      
+      // Check that items are included and organized by type
+      const response = JSON.parse(result.content[0].text);
+      const collections = response.results;
+      expect(collections).toHaveLength(1);
+      expect(collections[0].items).toBeDefined();
+      expect(collections[0].items.total_count).toBe(3);
+      expect(collections[0].items.cards).toHaveLength(1);
+      expect(collections[0].items.dashboards).toHaveLength(1);
+      expect(collections[0].items.collections).toHaveLength(1);
+      expect(collections[0].items.cards[0].name).toBe('Marketing Report');
+      expect(collections[0].items.dashboards[0].name).toBe('Marketing Dashboard');
+      expect(collections[0].items.collections[0].name).toBe('Campaigns');
+    });
+
+    it('should retrieve collections without items when getCollectionItems fails', async () => {
+      mockApiClient.getCollection.mockResolvedValue(createCachedResponse(sampleCollection));
+      mockApiClient.getCollectionItems.mockRejectedValue(new Error('Items not accessible'));
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const request = createMockRequest('retrieve', { model: 'collection', ids: [1] });
+      
+      // This should fail completely since we're using Promise.all
+      await expect(
+        handleRetrieve(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow();
+
+      expect(mockApiClient.getCollection).toHaveBeenCalledWith(1);
+      expect(mockApiClient.getCollectionItems).toHaveBeenCalledWith(1);
     });
   });
 

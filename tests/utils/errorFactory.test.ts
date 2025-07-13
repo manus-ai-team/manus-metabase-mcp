@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   AuthenticationErrorFactory,
   AuthorizationErrorFactory,
@@ -10,7 +10,8 @@ import {
   ExportErrorFactory,
   createErrorFromHttpResponse,
 } from '../../src/utils/errorFactory.js';
-import { ErrorCategory, RecoveryAction } from '../../src/types/core.js';
+import { validateMetabaseResponse } from '../../src/utils/errorHandling.js';
+import { ErrorCategory, RecoveryAction, McpError } from '../../src/types/core.js';
 
 describe('ErrorFactory', () => {
   describe('AuthenticationErrorFactory', () => {
@@ -98,6 +99,44 @@ describe('ErrorFactory', () => {
       expect(error.details.category).toBe(ErrorCategory.QUERY_EXECUTION);
       expect(error.details.recoveryAction).toBe(RecoveryAction.VALIDATE_INPUT);
     });
+
+    it('should create card parameter mismatch error', () => {
+      const parameterDetails = {
+        tag: {
+          id: 'param-id',
+          name: 'user_id',
+          'display-name': 'User ID',
+          type: 'id',
+          dimension: ['template-tag', 'user_id']
+        },
+        type: 'invalid-parameter',
+        params: [
+          {
+            value: 'john_doe',
+            id: 'param-id',
+            type: 'id',
+            target: ['dimension', ['template-tag', 'user_id']],
+            slug: 'user_id'
+          }
+        ]
+      };
+
+      const error = ValidationErrorFactory.cardParameterMismatch(parameterDetails);
+      
+      expect(error.message).toBe('Card parameter type mismatch: user_id');
+      expect(error.details.category).toBe(ErrorCategory.VALIDATION);
+      expect(error.details.recoveryAction).toBe(RecoveryAction.VALIDATE_INPUT);
+      expect(error.details.retryable).toBe(false);
+      expect(error.details.agentGuidance).toContain('Parameter \'user_id\' expects id type but received \'john_doe\'');
+      expect(error.details.troubleshootingSteps).toContain('Verify parameter \'user_id\' value matches expected type: id');
+      expect(error.details.additionalContext).toEqual({
+        parameterName: 'user_id',
+        expectedType: 'id',
+        submittedValue: 'john_doe',
+        parameterDetails
+      });
+    });
+
   });
 
   describe('NetworkErrorFactory', () => {
@@ -189,6 +228,42 @@ describe('ErrorFactory', () => {
       
       expect(error.details.category).toBe(ErrorCategory.QUERY_EXECUTION);
       expect(error.details.recoveryAction).toBe(RecoveryAction.VALIDATE_INPUT);
+    });
+
+    it('should create 400 card parameter mismatch error for invalid-parameter error type', () => {
+      const responseData = {
+        error_type: 'invalid-parameter',
+        'ex-data': {
+          tag: {
+            id: 'param-id',
+            name: 'user_id',
+            'display-name': 'User ID',
+            type: 'id',
+            dimension: ['template-tag', 'user_id']
+          },
+          type: 'invalid-parameter',
+          params: [
+            {
+              value: 'john_doe',
+              id: 'param-id',
+              type: 'id',
+              target: ['dimension', ['template-tag', 'user_id']],
+              slug: 'user_id'
+            }
+          ]
+        }
+      };
+
+      const error = createErrorFromHttpResponse(
+        400,
+        responseData,
+        'execute card'
+      );
+      
+      expect(error.message).toBe('Card parameter type mismatch: user_id');
+      expect(error.details.category).toBe(ErrorCategory.VALIDATION);
+      expect(error.details.recoveryAction).toBe(RecoveryAction.VALIDATE_INPUT);
+      expect(error.details.agentGuidance).toContain('Parameter \'user_id\' expects id type but received \'john_doe\'');
     });
 
     it('should create 401 authentication error', () => {
@@ -283,5 +358,178 @@ describe('ErrorFactory', () => {
       
       expect(response.retryAfterMs).toBe(60000);
     });
+  });
+
+  describe('validateMetabaseResponse', () => {
+    const mockLogError = vi.fn();
+
+    beforeEach(() => {
+      mockLogError.mockClear();
+    });
+
+    it('should not throw for successful responses', () => {
+      const successResponse = {
+        data: { rows: [['test']], cols: [{ name: 'col1' }] },
+        status: 'success'
+      };
+
+      expect(() => {
+        validateMetabaseResponse(
+          successResponse,
+          { operation: 'Test operation', resourceId: 123 },
+          mockLogError
+        );
+      }).not.toThrow();
+
+      expect(mockLogError).not.toHaveBeenCalled();
+    });
+
+    it('should throw McpError for invalid-parameter error type with detailed error data', () => {
+      const errorResponse = {
+        error_type: 'invalid-parameter',
+        status: 'failed',
+        error: 'For input string: "test"',
+        via: [
+          {
+            'ex-data': {
+              tag: {
+                id: 'param-id',
+                name: 'user_id',
+                'display-name': 'User ID',
+                type: 'id',
+                dimension: ['template-tag', 'user_id']
+              },
+              type: 'invalid-parameter',
+              params: [
+                {
+                  value: 'test_value',
+                  id: 'param-id',
+                  type: 'id',
+                  target: ['dimension', ['template-tag', 'user_id']],
+                  slug: 'user_id'
+                }
+              ]
+            }
+          }
+        ]
+      };
+
+      expect(() => {
+        validateMetabaseResponse(
+          errorResponse,
+          { operation: 'Card execution', resourceId: 123 },
+          mockLogError
+        );
+      }).toThrow(McpError);
+
+      expect(mockLogError).toHaveBeenCalledWith(
+        'Card execution parameter validation failed for 123',
+        errorResponse
+      );
+    });
+
+    it('should throw McpError for invalid-parameter error type with fallback error', () => {
+      const errorResponse = {
+        error_type: 'invalid-parameter',
+        status: 'failed',
+        error: 'Parameter validation failed'
+      };
+
+      expect(() => {
+        validateMetabaseResponse(
+          errorResponse,
+          { operation: 'Card execution', resourceId: 456 },
+          mockLogError
+        );
+      }).toThrowError('Card execution parameter validation failed: Parameter validation failed');
+
+      expect(mockLogError).toHaveBeenCalledWith(
+        'Card execution parameter validation failed for 456',
+        errorResponse
+      );
+    });
+
+    it('should throw McpError for other error types with failed status', () => {
+      const errorResponse = {
+        error_type: 'database-error',
+        status: 'failed',
+        error: 'Database connection failed'
+      };
+
+      expect(() => {
+        validateMetabaseResponse(
+          errorResponse,
+          { operation: 'Query execution' },
+          mockLogError
+        );
+      }).toThrowError('Query execution failed: Database connection failed');
+
+      expect(mockLogError).toHaveBeenCalledWith(
+        'Query execution failed with embedded error',
+        errorResponse
+      );
+    });
+
+    it('should handle context without resourceId', () => {
+      const errorResponse = {
+        error_type: 'invalid-parameter',
+        status: 'failed',
+        error: 'Invalid parameter'
+      };
+
+      expect(() => {
+        validateMetabaseResponse(
+          errorResponse,
+          { operation: 'Search operation' },
+          mockLogError
+        );
+      }).toThrow(McpError);
+
+      expect(mockLogError).toHaveBeenCalledWith(
+        'Search operation parameter validation failed',
+        errorResponse
+      );
+    });
+
+    it('should extract error details from top-level ex-data if via array is not present', () => {
+      const errorResponse = {
+        error_type: 'invalid-parameter',
+        status: 'failed',
+        error: 'Parameter error',
+        'ex-data': {
+          tag: {
+            id: 'param-id',
+            name: 'test_param',
+            'display-name': 'Test Parameter',
+            type: 'text',
+            dimension: ['template-tag', 'test_param']
+          },
+          type: 'invalid-parameter',
+          params: [
+            {
+              value: 'invalid_value',
+              id: 'param-id',
+              type: 'text',
+              target: ['dimension', ['template-tag', 'test_param']],
+              slug: 'test_param'
+            }
+          ]
+        }
+      };
+
+      expect(() => {
+        validateMetabaseResponse(
+          errorResponse,
+          { operation: 'Test operation', resourceId: 789 },
+          mockLogError
+        );
+      }).toThrow(McpError);
+
+      expect(mockLogError).toHaveBeenCalledWith(
+        'Test operation parameter validation failed for 789',
+        errorResponse
+      );
+    });
+
   });
 });

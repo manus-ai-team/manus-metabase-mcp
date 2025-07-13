@@ -198,9 +198,26 @@ export async function handleRetrieve(
           case 'database':
             response = await apiClient.getDatabase(id);
             break;
-          case 'collection':
-            response = await apiClient.getCollection(id);
+          case 'collection': {
+            // For collections, get both metadata and items like resources do
+            const [collectionResponse, itemsResponse] = await Promise.all([
+              apiClient.getCollection(id),
+              apiClient.getCollectionItems(id),
+            ]);
+
+            // Combine the collection metadata with its items
+            const collectionWithItems = {
+              ...collectionResponse.data,
+              items: itemsResponse.data || [],
+            };
+
+            response = {
+              data: collectionWithItems,
+              source: collectionResponse.source, // Use the source from the main collection call
+              fetchTime: collectionResponse.fetchTime + itemsResponse.fetchTime,
+            };
             break;
+          }
           case 'field':
             response = await apiClient.getField(id);
             break;
@@ -459,7 +476,7 @@ export async function handleRetrieve(
         break;
       case 'collection':
         response.usage_guidance =
-          'Collection details include organizational structure and metadata for managing questions, dashboards, models, and other Metabase content. Collections work like folders to organize your Metabase items. Response is lightly optimized to remove archive metadata.';
+          'Collection details include organizational structure, metadata, and items within the collection. Items are organized by type (cards, dashboards, collections, other) for easy navigation. Collections work like folders to organize your Metabase items. Use the items array to see what content is available in this collection.';
         break;
       case 'field':
         response.usage_guidance =

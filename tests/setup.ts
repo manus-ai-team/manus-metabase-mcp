@@ -18,6 +18,7 @@ export const mockApiClient = {
   getTable: vi.fn(),
   getDatabase: vi.fn(),
   getCollection: vi.fn(),
+  getCollectionItems: vi.fn(),
   getField: vi.fn(),
 
   // List retrieval methods
@@ -121,6 +122,29 @@ export const sampleCollection = {
   created_at: '2023-01-01T00:00:00.000Z',
   updated_at: '2023-01-01T00:00:00.000Z',
 };
+
+export const sampleCollectionItems = [
+  {
+    id: 10,
+    name: 'Marketing Dashboard',
+    description: 'Marketing KPIs',
+    model: 'dashboard',
+    view_count: 150
+  },
+  {
+    id: 20,
+    name: 'Marketing Report',
+    description: 'Monthly marketing report',
+    model: 'card',
+    view_count: 75
+  },
+  {
+    id: 30,
+    name: 'Campaigns',
+    description: 'Campaign collection',
+    model: 'collection'
+  }
+];
 
 export const sampleField = {
   id: 1,
