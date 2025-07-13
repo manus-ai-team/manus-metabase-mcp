@@ -326,14 +326,3 @@ export interface OptimizedField {
   };
   retrieved_at: string;
 }
-
-/**
- * Union type for all optimized response types
- */
-export type OptimizedResponse =
-  | OptimizedCard
-  | OptimizedDashboard
-  | OptimizedTable
-  | OptimizedDatabase
-  | OptimizedCollection
-  | OptimizedField;

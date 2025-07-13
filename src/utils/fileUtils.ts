@@ -25,61 +25,6 @@ export function sanitizeFilename(filename: string | undefined): string {
 }
 
 /**
- * Generate standardized export result message
- */
-export function generateExportMessage(
-  format: string,
-  query: string,
-  databaseId: number,
-  rowCount: number,
-  fileSize: string,
-  saveFile: boolean,
-  savedFilePath: string,
-  filename: string,
-  fileSaveError?: string
-): string {
-  const queryPreview = query.length > 100 ? `${query.substring(0, 100)}...` : query;
-
-  let statusMessage = '';
-  if (saveFile) {
-    if (fileSaveError) {
-      statusMessage = `\nFile Save Status: FAILED - ${fileSaveError}\nFallback: Use manual copy-paste method below\n`;
-    } else {
-      statusMessage = `\nFile Save Status: SUCCESS\nFile Location: ${savedFilePath}\nDownloads Folder: Available for use\n`;
-    }
-  }
-
-  const formatUpper = format.toUpperCase();
-
-  return `# Query Export Results (${formatUpper} Format)
-
-Query: ${queryPreview}
-Database ID: ${databaseId}
-${format === 'xlsx' ? `File Size: ${fileSize} bytes` : `Rows Exported: ${rowCount.toLocaleString()}`}
-Export Method: Metabase high-capacity API (supports up to 1M rows)${statusMessage}
-
-## Manual Save Instructions${saveFile && !fileSaveError ? ' (Alternative Method)' : ''}:
-
-1. Select all the ${formatUpper} content below${format === 'csv' ? ' (between the ```csv markers)' : ''}
-2. Copy the selected text (Cmd+C / Ctrl+C)
-3. Open a ${format === 'xlsx' ? 'spreadsheet application' : format === 'json' ? 'text editor' : 'text editor or spreadsheet application'}
-4. Paste the content (Cmd+V / Ctrl+V)
-5. Save as: ${filename}
-
-## ${formatUpper} Data:
-
-${
-  format === 'xlsx'
-    ? `Excel file exported successfully. ${
-        saveFile && !fileSaveError
-          ? `File has been saved to: ${savedFilePath}\nCompatible with: Excel, Google Sheets, LibreOffice Calc, and other spreadsheet applications`
-          : 'To save this Excel file:\n1. Set save_file: true in your export_query parameters\n2. The file will be automatically saved to your Downloads folder\n3. Open with Excel, Google Sheets, or any spreadsheet application'
-      }\n\nTechnical Details:\n- Binary Data: Contains Excel binary data (.xlsx format)\n- High Capacity: Supports up to 1 million rows (vs. 2,000 row limit of standard queries)\n- Native Format: Preserves data types and formatting for spreadsheet applications`
-    : '```' + format + '\n'
-}`;
-}
-
-/**
  * Save raw response structure to reference file for documentation
  * Used to maintain field references for optimization decisions
  */

@@ -14,8 +14,5 @@ export * from './errorHandling.js';
 // File utilities
 export * from './fileUtils.js';
 
-// Data utilities
-export * from './dataUtils.js';
-
 // Request utilities
 export * from './requestUtils.js';
