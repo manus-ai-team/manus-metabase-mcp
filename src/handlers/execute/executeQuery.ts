@@ -1,6 +1,7 @@
 import { MetabaseApiClient } from '../../api.js';
 import { handleApiError, validatePositiveInteger } from '../../utils/index.js';
 import { SqlExecutionParams, ExecutionResponse } from './types.js';
+import { optimizeExecuteData } from './optimizers.js';
 
 export async function executeSqlQuery(
   params: SqlExecutionParams,
@@ -84,11 +85,7 @@ export async function executeSqlQuery(
     );
 
     // Create optimized response with only essential data
-    const optimizedData = {
-      rows: response?.data?.rows || [],
-      cols: response?.data?.cols || [],
-      row_count: rowCount,
-    };
+    const optimizedData = optimizeExecuteData(response?.data);
 
     return {
       content: [
