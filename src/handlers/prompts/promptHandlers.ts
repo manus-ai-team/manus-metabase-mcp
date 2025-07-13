@@ -3,10 +3,8 @@ import { ErrorCode, McpError } from '../../types/core.js';
 import { MetabaseApiClient } from '../../api.js';
 import { promptDefinitions } from './promptDefinitions.js';
 import {
-  generateQueryBuildingPrompt,
-  generateDashboardAnalysisPrompt,
-  generateBusinessReportPrompt,
-  generatePerformanceTroubleshootingPrompt,
+  generateCardExecutionWorkflowPrompt,
+  generateCardExportWorkflowPrompt,
 } from './promptGenerators.js';
 import { ListPromptsRequest, GetPromptRequest, Prompt, LogFunction } from './types.js';
 
@@ -45,17 +43,11 @@ export async function handleGetPrompt(
 
   try {
     switch (promptName) {
-      case 'build_sql_query':
-        return generateQueryBuildingPrompt(args, apiClient, logWarn);
+      case 'execute_card':
+        return generateCardExecutionWorkflowPrompt(args, apiClient, logInfo, logWarn);
 
-      case 'analyze_dashboard':
-        return generateDashboardAnalysisPrompt(args, apiClient, logWarn);
-
-      case 'create_business_report':
-        return generateBusinessReportPrompt(args);
-
-      case 'troubleshoot_query_performance':
-        return generatePerformanceTroubleshootingPrompt(args, apiClient, logWarn);
+      case 'export_card':
+        return generateCardExportWorkflowPrompt(args, apiClient, logInfo, logWarn);
 
       default:
         throw new McpError(ErrorCode.InvalidRequest, `Unknown prompt: ${promptName}`);

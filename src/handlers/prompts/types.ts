@@ -51,8 +51,5 @@ export interface PromptResponse {
   messages: PromptMessage[];
 }
 
-// Analysis type for dashboard analysis
-export type AnalysisType = 'performance' | 'design' | 'data_quality' | 'comprehensive';
-
 // Logging function type
 export type LogFunction = (message: string, data?: unknown, error?: Error) => void;
