@@ -179,6 +179,34 @@ export class ValidationErrorFactory {
     });
   }
 
+  static cardParameterMismatch(parameterDetails: any): McpError {
+    const paramName =
+      parameterDetails?.tag?.name || parameterDetails?.tag?.['display-name'] || 'parameter';
+    const submittedValue = parameterDetails?.params?.[0]?.value || 'unknown';
+    const expectedType = parameterDetails?.tag?.type || 'unknown';
+
+    return new McpError(ErrorCode.InvalidParams, `Card parameter type mismatch: ${paramName}`, {
+      category: ErrorCategory.VALIDATION,
+      httpStatus: 400,
+      userMessage: `The parameter '${paramName}' has a type mismatch.`,
+      agentGuidance: `Parameter '${paramName}' expects ${expectedType} type but received '${submittedValue}'. Check the parameter type requirements for this card. Consider using execute_query with the card's SQL for more flexible parameter handling.`,
+      recoveryAction: RecoveryAction.VALIDATE_INPUT,
+      retryable: false,
+      additionalContext: {
+        parameterName: paramName,
+        expectedType,
+        submittedValue,
+        parameterDetails,
+      },
+      troubleshootingSteps: [
+        `Verify parameter '${paramName}' value matches expected type: ${expectedType}`,
+        "Check the card's parameter configuration in Metabase",
+        'Use the retrieve tool to get card details and parameter requirements',
+        "Consider using execute_query with the card's SQL for more flexible parameter handling",
+      ],
+    });
+  }
+
   static sqlSyntaxError(query: string, error: string): McpError {
     return new McpError(ErrorCode.InvalidRequest, `SQL syntax error: ${error}`, {
       category: ErrorCategory.QUERY_EXECUTION,
@@ -363,6 +391,11 @@ export function createErrorFromHttpResponse(
 
   switch (status) {
     case 400: {
+      // Check for Metabase card parameter validation errors
+      if (responseData?.error_type === 'invalid-parameter' && responseData?.['ex-data']) {
+        return ValidationErrorFactory.cardParameterMismatch(responseData['ex-data']);
+      }
+
       if (
         errorMessage.toLowerCase().includes('sql') ||
         errorMessage.toLowerCase().includes('syntax')

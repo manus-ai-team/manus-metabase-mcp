@@ -2,8 +2,8 @@
  * Error handling utilities for the Metabase MCP server.
  */
 
-import { ErrorCode, McpError } from '../types/core.js';
-import { createErrorFromHttpResponse } from './errorFactory.js';
+import { ErrorCode, McpError, ErrorCategory, RecoveryAction } from '../types/core.js';
+import { createErrorFromHttpResponse, ValidationErrorFactory } from './errorFactory.js';
 
 /**
  * Error handling context for different operations
@@ -196,4 +196,96 @@ function getGenericErrorMessage(errorMessage: string, context: ErrorContext): st
   }
 
   return `${operation} failed: ${errorMessage}`;
+}
+
+/**
+ * Checks if a Metabase response contains embedded error information
+ * and throws appropriate errors if found.
+ *
+ * Metabase sometimes returns HTTP 200 responses with error details embedded
+ * in the response body rather than using proper HTTP error status codes.
+ *
+ * @param response - The response from Metabase API
+ * @param context - Context information for error logging
+ * @param logError - Error logging function
+ * @throws {McpError} If the response contains parameter validation errors
+ */
+export function validateMetabaseResponse(
+  response: any,
+  context: { operation: string; resourceId?: string | number },
+  logError: (message: string, data?: unknown) => void
+): void {
+  // Check if the response contains error information (Metabase returns 200 with embedded errors)
+  if (response?.error_type === 'invalid-parameter') {
+    logError(
+      `${context.operation} parameter validation failed${context.resourceId ? ` for ${context.resourceId}` : ''}`,
+      response
+    );
+
+    // Check for parameter errors in the via array
+    const parameterErrors = response?.via?.filter(
+      (error: any) => error?.error_type === 'invalid-parameter' && error?.['ex-data']
+    );
+
+    if (parameterErrors && parameterErrors.length > 0) {
+      // Use the first parameter error found
+      throw ValidationErrorFactory.cardParameterMismatch(parameterErrors[0]['ex-data']);
+    }
+
+    // Fallback: check top-level ex-data if via array doesn't contain parameter errors
+    const errorDetails = response?.['ex-data'];
+    if (errorDetails) {
+      throw ValidationErrorFactory.cardParameterMismatch(errorDetails);
+    }
+
+    // Fallback to generic parameter error
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `${context.operation} parameter validation failed: ${response.error || 'Invalid parameter values'}`,
+      {
+        category: ErrorCategory.VALIDATION,
+        httpStatus: 400,
+        userMessage: `${context.operation} parameter validation failed due to type mismatch.`,
+        agentGuidance: `${context.operation} failed due to parameter validation errors. Check parameter types and values. Consider using execute_query with the card's SQL for more flexible parameter handling.`,
+        recoveryAction: RecoveryAction.VALIDATE_INPUT,
+        retryable: false,
+        additionalContext: { response },
+        troubleshootingSteps: [
+          'Verify parameter types match expected parameter types',
+          'Check parameter values are in the correct format',
+          'Use the retrieve tool to get resource details and parameter requirements',
+          "Consider using execute_query with the card's SQL for more flexible parameter handling",
+        ],
+      }
+    );
+  }
+
+  // Check for other common embedded error types
+  if (response?.error_type && response?.status === 'failed') {
+    logError(
+      `${context.operation} failed with embedded error${context.resourceId ? ` for ${context.resourceId}` : ''}`,
+      response
+    );
+
+    throw new McpError(
+      ErrorCode.InternalError,
+      `${context.operation} failed: ${response.error || 'Unknown error'}`,
+      {
+        category: ErrorCategory.EXTERNAL_SERVICE,
+        httpStatus: 500,
+        userMessage: `${context.operation} failed due to a server error.`,
+        agentGuidance: `${context.operation} failed with error type '${response.error_type}'. This may be temporary. Try again or check your request parameters.`,
+        recoveryAction: RecoveryAction.RETRY_WITH_BACKOFF,
+        retryable: true,
+        retryAfterMs: 3000,
+        additionalContext: { response },
+        troubleshootingSteps: [
+          'Check if the error is temporary and retry',
+          'Verify your request parameters are correct',
+          'Check the server logs for more details',
+          'Contact support if the issue persists',
+        ],
+      }
+    );
+  }
 }

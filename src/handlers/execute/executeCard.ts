@@ -1,5 +1,9 @@
 import { MetabaseApiClient } from '../../api.js';
-import { handleApiError, validatePositiveInteger } from '../../utils/index.js';
+import {
+  handleApiError,
+  validatePositiveInteger,
+  validateMetabaseResponse,
+} from '../../utils/index.js';
 import { CardExecutionParams, ExecutionResponse } from './types.js';
 
 export async function executeCard(
@@ -31,6 +35,13 @@ export async function executeCard(
       method: 'POST',
       body: JSON.stringify(cardRequestBody),
     });
+
+    // Check for embedded errors in the response (Metabase returns 200 with embedded errors)
+    validateMetabaseResponse(
+      response,
+      { operation: 'Card execution', resourceId: cardId },
+      logError
+    );
 
     // Handle different response formats from Metabase cards
     let originalRowCount = 0;
@@ -101,6 +112,11 @@ export async function executeCard(
       ],
     };
   } catch (error: any) {
+    // Check if this is a structured Metabase error response with parameter validation details
+    if (error?.response?.data?.error_type === 'invalid-parameter') {
+      logError(`Card parameter validation failed for card ${cardId}`, error.response.data);
+    }
+
     throw handleApiError(
       error,
       {
