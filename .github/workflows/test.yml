@@ -2,11 +2,11 @@ name: Test Suite
 
 on:
   push:
-    branches: [main, develop]
+    branches: [master, develop]
     tags:
       - 'v*'
   pull_request:
-    branches: [main, develop]
+    branches: [master, develop]
 
 permissions:
   contents: write
@@ -147,33 +147,33 @@ jobs:
     name: DXT Extension Build
     runs-on: ubuntu-latest
     needs: [quality-gates]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')
-    
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20.x'
         cache: 'npm'
-        
+
     - name: Install dependencies
       run: npm ci
-      
+
     - name: Install DXT CLI
       run: npm install -g @anthropic-ai/dxt
-      
+
     - name: Build DXT packages
-      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
       run: |
         npm run dxt:build
         echo "✅ DXT packages built successfully"
         ls -la *.dxt
-        
+
     - name: Upload DXT artifacts
-      if: github.ref == 'refs/heads/main'
+      if: github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
         name: metabase-mcp-dxt-packages
@@ -181,7 +181,7 @@ jobs:
           metabase-mcp-api-key.dxt
           metabase-mcp-session.dxt
         retention-days: 7
-        
+
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v2
@@ -193,31 +193,31 @@ jobs:
         name: Release ${{ github.ref_name }}
         body: |
           ## Metabase MCP Server ${{ github.ref_name }}
-          
+
           ### Desktop Extension (DXT) Installation
-          
+
           Choose the appropriate DXT package for your authentication method:
-          
+
           **API Key Authentication (Recommended):**
           1. Download `metabase-mcp-api-key.dxt` from the assets below
           2. Open the file with Claude Desktop to install
           3. Configure your Metabase URL and API key in Claude Desktop's extension settings
-          
+
           **Session Authentication (Email/Password):**
           1. Download `metabase-mcp-session.dxt` from the assets below
-          2. Open the file with Claude Desktop to install  
+          2. Open the file with Claude Desktop to install
           3. Configure your Metabase URL, email, and password in Claude Desktop's extension settings
-          
+
           ### Manual Installation
-          
+
           For manual installation instructions, see the [README](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md#installation).
-          
+
           ### What's Changed
-          
+
           See the auto-generated release notes below for a full list of changes.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
+
     - name: DXT Build Summary
       run: |
         echo "## 📦 DXT Extension Build Report" >> $GITHUB_STEP_SUMMARY
