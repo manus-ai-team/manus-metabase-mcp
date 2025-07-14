@@ -1,6 +1,6 @@
 # Metabase MCP Server
 
-[![smithery badge](https://smithery.ai/badge/@jerichosequitin/metabase-mcp)](https://smithery.ai/server/@jerichosequitin/metabase-mcp)
+[![smithery badge](https://smithery.ai/badge/@jerichosequitin/metabase)](https://smithery.ai/server/@jerichosequitin/metabase)
 
 **Version**: 1.0.0
 
