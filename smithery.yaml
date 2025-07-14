@@ -41,7 +41,7 @@ startCommand:
 
       return {
         command: 'node',
-        args: ['build/index.js'],
+        args: ['build/src/index.js'],
         env
       };
     }

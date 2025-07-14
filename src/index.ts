@@ -1,12 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * Metabase MCP Server - Jericho's Custom Fork
- *
- * Original Author: Hyeongjun Yu (@hyeongjun-dev)
- * Forked & Modified by: Jericho Sequitin (@jerichosequitin)
  *
  * Entry point for the Metabase MCP Server.
+ *
  */
 
 import { MetabaseServer } from './server.js';
