@@ -5,7 +5,7 @@ FROM node:lts-alpine
 
 LABEL maintainer="Jericho Sequitin <https://github.com/jerichosequitin>"
 LABEL description="Model Context Protocol server for Metabase"
-LABEL version="0.1.0"
+LABEL version="1.0.0"
 
 # Set working directory
 WORKDIR /usr/src/app
