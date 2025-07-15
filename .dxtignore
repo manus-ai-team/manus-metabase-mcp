@@ -39,7 +39,11 @@ scripts/
 
 # Source files (only include built files)
 src/
+
+# Explicitly include build directory
 !build/
+!build/src/
+!build/src/**/*
 
 # CI/CD
 .github/

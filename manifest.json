@@ -1,5 +1,5 @@
 {
-  "dxt_version": "0.1",
+  "dxt_version": "0.2.5",
   "name": "metabase-mcp",
   "display_name": "Metabase",
   "version": "1.0.0",
@@ -116,8 +116,7 @@
       "title": "Log Level",
       "description": "Logging level",
       "required": false,
-      "default": "info",
-      "enum": ["debug", "info", "warn", "error", "fatal"]
+      "default": "info"
     },
     "cache_ttl_ms": {
       "type": "number",
