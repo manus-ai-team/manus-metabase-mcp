@@ -42,6 +42,3 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
-
-# DXT package files
-*.dxt
